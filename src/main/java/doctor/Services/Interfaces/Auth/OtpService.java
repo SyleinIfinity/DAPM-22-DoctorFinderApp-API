@@ -1,0 +1,13 @@
+package doctor.Services.Interfaces.Auth;
+
+import doctor.Models.DTOs.Auth.Responses.OtpConsumeResponseDto;
+import doctor.Models.DTOs.Auth.Responses.OtpSendResponseDto;
+import doctor.Models.DTOs.Auth.Responses.OtpVerifyResponseDto;
+
+public interface OtpService {
+    OtpSendResponseDto sendOtp(String email, String purpose, boolean forceResend);
+
+    OtpVerifyResponseDto verifyOtp(String email, String purpose, String otpCode);
+
+    OtpConsumeResponseDto consumeVerifiedOtp(String email, String purpose);
+}

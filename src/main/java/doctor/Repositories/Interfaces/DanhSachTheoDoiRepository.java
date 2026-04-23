@@ -2,7 +2,12 @@ package doctor.Repositories.Interfaces;
 
 import doctor.Models.Entities.DanhSachTheoDoi;
 import doctor.Models.Entities.DanhSachTheoDoiId;
-import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
 
-public interface DanhSachTheoDoiRepository extends JpaRepository<DanhSachTheoDoi, DanhSachTheoDoiId> {}
+public interface DanhSachTheoDoiRepository extends BaseRepository<DanhSachTheoDoi, DanhSachTheoDoiId> {
+    boolean existsByMaNguoiDungAndMaBacSi(Integer maNguoiDung, Integer maBacSi);
 
+    List<DanhSachTheoDoi> findByMaNguoiDung(Integer maNguoiDung);
+
+    long countByMaBacSi(Integer maBacSi);
+}

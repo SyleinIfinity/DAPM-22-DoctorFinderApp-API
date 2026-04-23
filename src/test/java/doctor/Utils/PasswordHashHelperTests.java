@@ -1,0 +1,27 @@
+package doctor.Utils;
+
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
+
+class PasswordHashHelperTests {
+    private final PasswordHashHelper passwordHashHelper = new PasswordHashHelper();
+
+    @Test
+    void hashPassword_shouldBeDeterministic() {
+        String firstHash = passwordHashHelper.hashPassword("abc12345");
+        String secondHash = passwordHashHelper.hashPassword("abc12345");
+        Assertions.assertEquals(firstHash, secondHash);
+    }
+
+    @Test
+    void matches_shouldReturnTrueForCorrectPassword() {
+        String hash = passwordHashHelper.hashPassword("abc12345");
+        Assertions.assertTrue(passwordHashHelper.matches("abc12345", hash));
+    }
+
+    @Test
+    void matches_shouldReturnFalseForIncorrectPassword() {
+        String hash = passwordHashHelper.hashPassword("abc12345");
+        Assertions.assertFalse(passwordHashHelper.matches("wrong-password", hash));
+    }
+}

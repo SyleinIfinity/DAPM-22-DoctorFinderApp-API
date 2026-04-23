@@ -1,7 +1,8 @@
 package doctor.Repositories.Interfaces;
 
 import doctor.Models.Entities.KhungGio;
-import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.Optional;
 
-public interface KhungGioRepository extends JpaRepository<KhungGio, Integer> {}
-
+public interface KhungGioRepository extends BaseRepository<KhungGio, Integer> {
+    Optional<KhungGio> findByThoiLuongPhut(Integer thoiLuongPhut);
+}

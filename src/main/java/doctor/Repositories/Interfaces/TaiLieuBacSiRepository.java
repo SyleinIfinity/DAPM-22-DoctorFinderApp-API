@@ -1,7 +1,8 @@
 package doctor.Repositories.Interfaces;
 
 import doctor.Models.Entities.TaiLieuBacSi;
-import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
 
-public interface TaiLieuBacSiRepository extends JpaRepository<TaiLieuBacSi, Integer> {}
-
+public interface TaiLieuBacSiRepository extends BaseRepository<TaiLieuBacSi, Integer> {
+    List<TaiLieuBacSi> findByMaBacSi(Integer maBacSi);
+}

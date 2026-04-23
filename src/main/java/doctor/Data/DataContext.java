@@ -52,22 +52,22 @@ public class DataContext {
     // -------------------------
     @Transactional
     public TaiKhoan insertTaiKhoan(TaiKhoan entity) {
-        return taiKhoanRepository.save(entity);
+        return taiKhoanRepository.insert(entity);
     }
 
     @Transactional(readOnly = true)
     public Optional<TaiKhoan> selectTaiKhoanById(Integer maTaiKhoan) {
-        return taiKhoanRepository.findById(maTaiKhoan);
+        return taiKhoanRepository.selectById(maTaiKhoan);
     }
 
     @Transactional(readOnly = true)
     public List<TaiKhoan> selectAllTaiKhoan() {
-        return taiKhoanRepository.findAll();
+        return taiKhoanRepository.selectAll();
     }
 
     @Transactional
     public TaiKhoan updateTaiKhoan(TaiKhoan entity) {
-        return taiKhoanRepository.save(entity);
+        return taiKhoanRepository.update(entity);
     }
 
     @Transactional
@@ -80,22 +80,22 @@ public class DataContext {
     // -------------------------
     @Transactional
     public NguoiDung insertNguoiDung(NguoiDung entity) {
-        return nguoiDungRepository.save(entity);
+        return nguoiDungRepository.insert(entity);
     }
 
     @Transactional(readOnly = true)
     public Optional<NguoiDung> selectNguoiDungById(Integer maNguoiDung) {
-        return nguoiDungRepository.findById(maNguoiDung);
+        return nguoiDungRepository.selectById(maNguoiDung);
     }
 
     @Transactional(readOnly = true)
     public List<NguoiDung> selectAllNguoiDung() {
-        return nguoiDungRepository.findAll();
+        return nguoiDungRepository.selectAll();
     }
 
     @Transactional
     public NguoiDung updateNguoiDung(NguoiDung entity) {
-        return nguoiDungRepository.save(entity);
+        return nguoiDungRepository.update(entity);
     }
 
     @Transactional
@@ -108,22 +108,22 @@ public class DataContext {
     // -------------------------
     @Transactional
     public BacSi insertBacSi(BacSi entity) {
-        return bacSiRepository.save(entity);
+        return bacSiRepository.insert(entity);
     }
 
     @Transactional(readOnly = true)
     public Optional<BacSi> selectBacSiById(Integer maBacSi) {
-        return bacSiRepository.findById(maBacSi);
+        return bacSiRepository.selectById(maBacSi);
     }
 
     @Transactional(readOnly = true)
     public List<BacSi> selectAllBacSi() {
-        return bacSiRepository.findAll();
+        return bacSiRepository.selectAll();
     }
 
     @Transactional
     public BacSi updateBacSi(BacSi entity) {
-        return bacSiRepository.save(entity);
+        return bacSiRepository.update(entity);
     }
 
     @Transactional
@@ -136,22 +136,22 @@ public class DataContext {
     // -------------------------
     @Transactional
     public CuocHoiThoai insertCuocHoiThoai(CuocHoiThoai entity) {
-        return cuocHoiThoaiRepository.save(entity);
+        return cuocHoiThoaiRepository.insert(entity);
     }
 
     @Transactional(readOnly = true)
     public Optional<CuocHoiThoai> selectCuocHoiThoaiById(Integer maCuocHoiThoai) {
-        return cuocHoiThoaiRepository.findById(maCuocHoiThoai);
+        return cuocHoiThoaiRepository.selectById(maCuocHoiThoai);
     }
 
     @Transactional(readOnly = true)
     public List<CuocHoiThoai> selectAllCuocHoiThoai() {
-        return cuocHoiThoaiRepository.findAll();
+        return cuocHoiThoaiRepository.selectAll();
     }
 
     @Transactional
     public CuocHoiThoai updateCuocHoiThoai(CuocHoiThoai entity) {
-        return cuocHoiThoaiRepository.save(entity);
+        return cuocHoiThoaiRepository.update(entity);
     }
 
     @Transactional
@@ -164,22 +164,22 @@ public class DataContext {
     // -------------------------
     @Transactional
     public TinNhan insertTinNhan(TinNhan entity) {
-        return tinNhanRepository.save(entity);
+        return tinNhanRepository.insert(entity);
     }
 
     @Transactional(readOnly = true)
     public Optional<TinNhan> selectTinNhanById(Integer maTinNhan) {
-        return tinNhanRepository.findById(maTinNhan);
+        return tinNhanRepository.selectById(maTinNhan);
     }
 
     @Transactional(readOnly = true)
     public List<TinNhan> selectAllTinNhan() {
-        return tinNhanRepository.findAll();
+        return tinNhanRepository.selectAll();
     }
 
     @Transactional
     public TinNhan updateTinNhan(TinNhan entity) {
-        return tinNhanRepository.save(entity);
+        return tinNhanRepository.update(entity);
     }
 
     @Transactional
@@ -192,22 +192,22 @@ public class DataContext {
     // -------------------------
     @Transactional
     public TaiLieuBacSi insertTaiLieuBacSi(TaiLieuBacSi entity) {
-        return taiLieuBacSiRepository.save(entity);
+        return taiLieuBacSiRepository.insert(entity);
     }
 
     @Transactional(readOnly = true)
     public Optional<TaiLieuBacSi> selectTaiLieuBacSiById(Integer maTaiLieu) {
-        return taiLieuBacSiRepository.findById(maTaiLieu);
+        return taiLieuBacSiRepository.selectById(maTaiLieu);
     }
 
     @Transactional(readOnly = true)
     public List<TaiLieuBacSi> selectAllTaiLieuBacSi() {
-        return taiLieuBacSiRepository.findAll();
+        return taiLieuBacSiRepository.selectAll();
     }
 
     @Transactional
     public TaiLieuBacSi updateTaiLieuBacSi(TaiLieuBacSi entity) {
-        return taiLieuBacSiRepository.save(entity);
+        return taiLieuBacSiRepository.update(entity);
     }
 
     @Transactional
@@ -220,22 +220,22 @@ public class DataContext {
     // -------------------------
     @Transactional
     public DanhSachTheoDoi insertDanhSachTheoDoi(DanhSachTheoDoi entity) {
-        return danhSachTheoDoiRepository.save(entity);
+        return danhSachTheoDoiRepository.insert(entity);
     }
 
     @Transactional(readOnly = true)
     public Optional<DanhSachTheoDoi> selectDanhSachTheoDoi(Integer maNguoiDung, Integer maBacSi) {
-        return danhSachTheoDoiRepository.findById(new DanhSachTheoDoiId(maNguoiDung, maBacSi));
+        return danhSachTheoDoiRepository.selectById(new DanhSachTheoDoiId(maNguoiDung, maBacSi));
     }
 
     @Transactional(readOnly = true)
     public List<DanhSachTheoDoi> selectAllDanhSachTheoDoi() {
-        return danhSachTheoDoiRepository.findAll();
+        return danhSachTheoDoiRepository.selectAll();
     }
 
     @Transactional
     public DanhSachTheoDoi updateDanhSachTheoDoi(DanhSachTheoDoi entity) {
-        return danhSachTheoDoiRepository.save(entity);
+        return danhSachTheoDoiRepository.update(entity);
     }
 
     @Transactional
@@ -248,22 +248,22 @@ public class DataContext {
     // -------------------------
     @Transactional
     public DanhGiaBacSi insertDanhGiaBacSi(DanhGiaBacSi entity) {
-        return danhGiaBacSiRepository.save(entity);
+        return danhGiaBacSiRepository.insert(entity);
     }
 
     @Transactional(readOnly = true)
     public Optional<DanhGiaBacSi> selectDanhGiaBacSiById(Integer maDanhGia) {
-        return danhGiaBacSiRepository.findById(maDanhGia);
+        return danhGiaBacSiRepository.selectById(maDanhGia);
     }
 
     @Transactional(readOnly = true)
     public List<DanhGiaBacSi> selectAllDanhGiaBacSi() {
-        return danhGiaBacSiRepository.findAll();
+        return danhGiaBacSiRepository.selectAll();
     }
 
     @Transactional
     public DanhGiaBacSi updateDanhGiaBacSi(DanhGiaBacSi entity) {
-        return danhGiaBacSiRepository.save(entity);
+        return danhGiaBacSiRepository.update(entity);
     }
 
     @Transactional
@@ -276,22 +276,22 @@ public class DataContext {
     // -------------------------
     @Transactional
     public KhungGio insertKhungGio(KhungGio entity) {
-        return khungGioRepository.save(entity);
+        return khungGioRepository.insert(entity);
     }
 
     @Transactional(readOnly = true)
     public Optional<KhungGio> selectKhungGioById(Integer maKhungGio) {
-        return khungGioRepository.findById(maKhungGio);
+        return khungGioRepository.selectById(maKhungGio);
     }
 
     @Transactional(readOnly = true)
     public List<KhungGio> selectAllKhungGio() {
-        return khungGioRepository.findAll();
+        return khungGioRepository.selectAll();
     }
 
     @Transactional
     public KhungGio updateKhungGio(KhungGio entity) {
-        return khungGioRepository.save(entity);
+        return khungGioRepository.update(entity);
     }
 
     @Transactional
@@ -304,22 +304,22 @@ public class DataContext {
     // -------------------------
     @Transactional
     public LichLamViec insertLichLamViec(LichLamViec entity) {
-        return lichLamViecRepository.save(entity);
+        return lichLamViecRepository.insert(entity);
     }
 
     @Transactional(readOnly = true)
     public Optional<LichLamViec> selectLichLamViecById(Integer maLichLamViec) {
-        return lichLamViecRepository.findById(maLichLamViec);
+        return lichLamViecRepository.selectById(maLichLamViec);
     }
 
     @Transactional(readOnly = true)
     public List<LichLamViec> selectAllLichLamViec() {
-        return lichLamViecRepository.findAll();
+        return lichLamViecRepository.selectAll();
     }
 
     @Transactional
     public LichLamViec updateLichLamViec(LichLamViec entity) {
-        return lichLamViecRepository.save(entity);
+        return lichLamViecRepository.update(entity);
     }
 
     @Transactional
@@ -332,22 +332,22 @@ public class DataContext {
     // -------------------------
     @Transactional
     public ChiTietLich insertChiTietLich(ChiTietLich entity) {
-        return chiTietLichRepository.save(entity);
+        return chiTietLichRepository.insert(entity);
     }
 
     @Transactional(readOnly = true)
     public Optional<ChiTietLich> selectChiTietLichById(Integer maChiTiet) {
-        return chiTietLichRepository.findById(maChiTiet);
+        return chiTietLichRepository.selectById(maChiTiet);
     }
 
     @Transactional(readOnly = true)
     public List<ChiTietLich> selectAllChiTietLich() {
-        return chiTietLichRepository.findAll();
+        return chiTietLichRepository.selectAll();
     }
 
     @Transactional
     public ChiTietLich updateChiTietLich(ChiTietLich entity) {
-        return chiTietLichRepository.save(entity);
+        return chiTietLichRepository.update(entity);
     }
 
     @Transactional
@@ -360,22 +360,22 @@ public class DataContext {
     // -------------------------
     @Transactional
     public PhieuDatLich insertPhieuDatLich(PhieuDatLich entity) {
-        return phieuDatLichRepository.save(entity);
+        return phieuDatLichRepository.insert(entity);
     }
 
     @Transactional(readOnly = true)
     public Optional<PhieuDatLich> selectPhieuDatLichById(Integer maPhieuDatLich) {
-        return phieuDatLichRepository.findById(maPhieuDatLich);
+        return phieuDatLichRepository.selectById(maPhieuDatLich);
     }
 
     @Transactional(readOnly = true)
     public List<PhieuDatLich> selectAllPhieuDatLich() {
-        return phieuDatLichRepository.findAll();
+        return phieuDatLichRepository.selectAll();
     }
 
     @Transactional
     public PhieuDatLich updatePhieuDatLich(PhieuDatLich entity) {
-        return phieuDatLichRepository.save(entity);
+        return phieuDatLichRepository.update(entity);
     }
 
     @Transactional
@@ -391,34 +391,33 @@ public class DataContext {
         if (phieu.getTrangThaiPhieu() == null || phieu.getTrangThaiPhieu().isBlank()) {
             phieu.setTrangThaiPhieu("CHO_XAC_NHAN");
         }
-        return phieuDatLichRepository.saveAndFlush(phieu);
+        return phieuDatLichRepository.insert(phieu);
     }
 
     @Transactional
     public PhieuDatLich xacNhanPhieuDatLich(Integer maPhieuDatLich) {
         PhieuDatLich phieu =
                 phieuDatLichRepository
-                        .findById(maPhieuDatLich)
+                        .selectById(maPhieuDatLich)
                         .orElseThrow(
                                 () ->
                                         new IllegalArgumentException(
                                                 "Không tìm thấy PHIEU_DAT_LICH: " + maPhieuDatLich));
         phieu.setTrangThaiPhieu("DA_XAC_NHAN");
-        return phieuDatLichRepository.saveAndFlush(phieu);
+        return phieuDatLichRepository.update(phieu);
     }
 
     @Transactional
     public PhieuDatLich huyPhieuDatLich(Integer maPhieuDatLich, String lyDo) {
         PhieuDatLich phieu =
                 phieuDatLichRepository
-                        .findById(maPhieuDatLich)
+                        .selectById(maPhieuDatLich)
                         .orElseThrow(
                                 () ->
                                         new IllegalArgumentException(
                                                 "Không tìm thấy PHIEU_DAT_LICH: " + maPhieuDatLich));
         phieu.setTrangThaiPhieu("DA_HUY");
         phieu.setLyDoTuChoi(lyDo);
-        return phieuDatLichRepository.saveAndFlush(phieu);
+        return phieuDatLichRepository.update(phieu);
     }
 }
-

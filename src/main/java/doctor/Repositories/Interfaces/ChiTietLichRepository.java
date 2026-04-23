@@ -1,7 +1,13 @@
 package doctor.Repositories.Interfaces;
 
 import doctor.Models.Entities.ChiTietLich;
-import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
+import java.util.Optional;
 
-public interface ChiTietLichRepository extends JpaRepository<ChiTietLich, Integer> {}
+public interface ChiTietLichRepository extends BaseRepository<ChiTietLich, Integer> {
+    List<ChiTietLich> findByMaLichLamViec(Integer maLichLamViec);
 
+    List<ChiTietLich> findAvailableByMaLichLamViec(Integer maLichLamViec);
+
+    Optional<ChiTietLich> selectByIdForUpdate(Integer maChiTiet);
+}
