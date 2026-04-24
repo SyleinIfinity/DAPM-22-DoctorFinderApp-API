@@ -10,7 +10,9 @@ import doctor.Models.Enums.TrangThaiHoatDongTaiKhoan;
 import doctor.Repositories.Interfaces.BacSiRepository;
 import doctor.Repositories.Interfaces.NguoiDungRepository;
 import doctor.Repositories.Interfaces.TaiKhoanRepository;
-import doctor.Utils.PasswordHashHelper;
+import doctor.Security.LoginAttemptService;
+import doctor.Security.PasswordHashHelper;
+import doctor.Services.Interfaces.Auth.OtpService;
 import java.util.Optional;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -22,10 +24,17 @@ class AuthServiceImplTests {
     private final NguoiDungRepository nguoiDungRepository = Mockito.mock(NguoiDungRepository.class);
     private final BacSiRepository bacSiRepository = Mockito.mock(BacSiRepository.class);
     private final PasswordHashHelper passwordHashHelper = Mockito.mock(PasswordHashHelper.class);
+    private final OtpService otpService = Mockito.mock(OtpService.class);
+    private final LoginAttemptService loginAttemptService = Mockito.mock(LoginAttemptService.class);
 
     private final AuthServiceImpl authService =
             new AuthServiceImpl(
-                    taiKhoanRepository, nguoiDungRepository, bacSiRepository, passwordHashHelper);
+                    taiKhoanRepository,
+                    nguoiDungRepository,
+                    bacSiRepository,
+                    passwordHashHelper,
+                    otpService,
+                    loginAttemptService);
 
     @Test
     void registerNguoiDung_shouldCreateTaiKhoanAndNguoiDung() {
@@ -39,6 +48,7 @@ class AuthServiceImplTests {
                         "Khanh",
                         "0987654321",
                         "khanh@example.com",
+                        "otp-proof-token",
                         "012345678901",
                         null,
                         null,
@@ -48,6 +58,10 @@ class AuthServiceImplTests {
                         null,
                         null,
                         null);
+
+        Mockito.doNothing()
+                .when(otpService)
+                .consumeOtpProofToken("otp-proof-token", "khanh@example.com", "REGISTER");
 
         Mockito.when(taiKhoanRepository.existsByTenDangNhap("khanh123")).thenReturn(false);
         Mockito.when(nguoiDungRepository.existsBySoDienThoai("0987654321")).thenReturn(false);
@@ -98,7 +112,7 @@ class AuthServiceImplTests {
         Mockito.when(nguoiDungRepository.findByMaTaiKhoan(10)).thenReturn(Optional.of(nguoiDung));
         Mockito.when(bacSiRepository.findByMaTaiKhoan(10)).thenReturn(Optional.empty());
 
-        LoginResponseDto response = authService.login(request);
+        LoginResponseDto response = authService.login(request, "127.0.0.1");
 
         Assertions.assertTrue(response.authenticated());
         Assertions.assertEquals(10, response.maTaiKhoan());

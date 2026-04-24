@@ -6,9 +6,10 @@ import com.google.cloud.firestore.DocumentReference;
 import com.google.cloud.firestore.DocumentSnapshot;
 import com.google.cloud.firestore.Firestore;
 import com.google.cloud.firestore.SetOptions;
-import doctor.Models.DTOs.Auth.Responses.OtpConsumeResponseDto;
 import doctor.Models.DTOs.Auth.Responses.OtpSendResponseDto;
 import doctor.Models.DTOs.Auth.Responses.OtpVerifyResponseDto;
+import doctor.Security.OtpProofTokenHelper;
+import doctor.Security.OtpRateLimitService;
 import doctor.Services.Interfaces.Auth.OtpService;
 import doctor.Utils.OtpMailHelper;
 import java.nio.charset.StandardCharsets;
@@ -41,6 +42,8 @@ public class OtpServiceImpl implements OtpService {
 
     private final Firestore firestore;
     private final OtpMailHelper otpMailHelper;
+    private final OtpRateLimitService otpRateLimitService;
+    private final OtpProofTokenHelper otpProofTokenHelper;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Value("${app.otp.collection:otp_stage}")
@@ -62,10 +65,12 @@ public class OtpServiceImpl implements OtpService {
     private long lockSeconds;
 
     @Override
-    public OtpSendResponseDto sendOtp(String email, String purpose, boolean forceResend) {
+    public OtpSendResponseDto sendOtp(String email, String purpose, boolean forceResend, String clientIp) {
         String normalizedEmail = normalizeEmail(email);
         String normalizedPurpose = normalizePurpose(purpose);
+        String normalizedClientIp = normalizeClientIp(clientIp);
         Instant now = Instant.now();
+        otpRateLimitService.checkSendAllowed(normalizedClientIp, normalizedEmail);
 
         DocumentReference documentReference =
                 firestore.collection(otpCollection).document(buildDocumentId(normalizedEmail, normalizedPurpose));
@@ -189,11 +194,13 @@ public class OtpServiceImpl implements OtpService {
     }
 
     @Override
-    public OtpVerifyResponseDto verifyOtp(String email, String purpose, String otpCode) {
+    public OtpVerifyResponseDto verifyOtp(String email, String purpose, String otpCode, String clientIp) {
         String normalizedEmail = normalizeEmail(email);
         String normalizedPurpose = normalizePurpose(purpose);
         String normalizedOtp = normalizeOtpCode(otpCode);
+        String normalizedClientIp = normalizeClientIp(clientIp);
         Instant now = Instant.now();
+        otpRateLimitService.checkVerifyAllowed(normalizedClientIp, normalizedEmail);
 
         DocumentReference documentReference =
                 firestore.collection(otpCollection).document(buildDocumentId(normalizedEmail, normalizedPurpose));
@@ -207,6 +214,7 @@ public class OtpServiceImpl implements OtpService {
                     Math.max(1, maxAttempts),
                     0L,
                     0L,
+                    null,
                     "Khong ton tai OTP. Vui long gui OTP moi.");
         }
 
@@ -221,6 +229,7 @@ public class OtpServiceImpl implements OtpService {
                     0,
                     0L,
                     secondsUntil(now, currentStage.resendAfter()),
+                    null,
                     "OTP dang bi khoa tam thoi do nhap sai qua nhieu lan.");
         }
 
@@ -233,6 +242,7 @@ public class OtpServiceImpl implements OtpService {
                     0,
                     0L,
                     0L,
+                    null,
                     "OTP da duoc su dung. Vui long gui OTP moi.");
         }
 
@@ -245,6 +255,7 @@ public class OtpServiceImpl implements OtpService {
                     Math.max(0, currentStage.maxAttempts() - currentStage.attemptCount()),
                     0L,
                     0L,
+                    otpProofTokenHelper.generateProofToken(normalizedEmail, normalizedPurpose),
                     "OTP da xac thuc tu truoc.");
         }
 
@@ -257,6 +268,7 @@ public class OtpServiceImpl implements OtpService {
                     Math.max(0, currentStage.maxAttempts() - currentStage.attemptCount()),
                     0L,
                     0L,
+                    null,
                     "OTP khong o trang thai xac thuc. Vui long gui OTP moi.");
         }
 
@@ -270,6 +282,7 @@ public class OtpServiceImpl implements OtpService {
                     Math.max(0, currentStage.maxAttempts() - currentStage.attemptCount()),
                     0L,
                     0L,
+                    null,
                     "OTP da het han. Vui long gui OTP moi.");
         }
 
@@ -294,6 +307,7 @@ public class OtpServiceImpl implements OtpService {
                         0,
                         secondsUntil(now, currentStage.expiresAt()),
                         secondsUntil(now, lockUntil),
+                        null,
                         "Nhap sai OTP qua so lan cho phep. He thong da tam khoa.");
             }
 
@@ -306,6 +320,7 @@ public class OtpServiceImpl implements OtpService {
                     Math.max(0, currentStage.maxAttempts() - nextAttempt),
                     secondsUntil(now, currentStage.expiresAt()),
                     secondsUntil(now, currentStage.resendAfter()),
+                    null,
                     "OTP khong dung.");
         }
 
@@ -318,72 +333,36 @@ public class OtpServiceImpl implements OtpService {
                 Math.max(0, currentStage.maxAttempts() - currentStage.attemptCount()),
                 secondsUntil(now, currentStage.expiresAt()),
                 0L,
+                otpProofTokenHelper.generateProofToken(normalizedEmail, normalizedPurpose),
                 "Xac thuc OTP thanh cong.");
     }
 
     @Override
-    public OtpConsumeResponseDto consumeVerifiedOtp(String email, String purpose) {
+    public void consumeOtpProofToken(String otpProofToken, String email, String purpose) {
         String normalizedEmail = normalizeEmail(email);
         String normalizedPurpose = normalizePurpose(purpose);
-        Instant now = Instant.now();
+        otpProofTokenHelper.validateProofToken(otpProofToken, normalizedEmail, normalizedPurpose);
 
+        Instant now = Instant.now();
         DocumentReference documentReference =
                 firestore.collection(otpCollection).document(buildDocumentId(normalizedEmail, normalizedPurpose));
         DocumentSnapshot snapshot = await(documentReference.get());
         if (!snapshot.exists()) {
-            return buildConsumeResult(
-                    normalizedEmail,
-                    normalizedPurpose,
-                    STATUS_EXPIRED,
-                    false,
-                    "Khong ton tai OTP de su dung.");
+            throw new IllegalArgumentException("OTP khong ton tai hoac da het han");
         }
 
         OtpStageSnapshot currentStage = parseStageSnapshot(snapshot.getData());
         if (STATUS_USED.equals(currentStage.status())) {
-            return buildConsumeResult(
-                    normalizedEmail,
-                    normalizedPurpose,
-                    STATUS_USED,
-                    true,
-                    "OTP da duoc su dung truoc do.");
+            throw new IllegalArgumentException("OTP da duoc su dung");
         }
-
         if (currentStage.isLocked(now)) {
-            return buildConsumeResult(
-                    normalizedEmail,
-                    normalizedPurpose,
-                    STATUS_LOCKED,
-                    false,
-                    "OTP dang bi khoa tam thoi.");
+            throw new IllegalArgumentException("OTP dang bi khoa tam thoi");
+        }
+        if (!STATUS_VERIFIED.equals(currentStage.status())) {
+            throw new IllegalArgumentException("OTP chua duoc xac thuc");
         }
 
-        if (STATUS_VERIFIED.equals(currentStage.status())) {
-            markUsed(documentReference, now);
-            return buildConsumeResult(
-                    normalizedEmail,
-                    normalizedPurpose,
-                    STATUS_USED,
-                    true,
-                    "Da danh dau OTP la da su dung.");
-        }
-
-        if (STATUS_PENDING.equals(currentStage.status()) && currentStage.isExpired(now)) {
-            markExpired(documentReference, now);
-            return buildConsumeResult(
-                    normalizedEmail,
-                    normalizedPurpose,
-                    STATUS_EXPIRED,
-                    false,
-                    "OTP da het han.");
-        }
-
-        return buildConsumeResult(
-                normalizedEmail,
-                normalizedPurpose,
-                currentStage.status(),
-                false,
-                "OTP chua duoc xac thuc, khong the su dung.");
+        markUsed(documentReference, now);
     }
 
     private void savePendingStage(
@@ -493,6 +472,7 @@ public class OtpServiceImpl implements OtpService {
             int attemptsRemaining,
             long expiresInSeconds,
             long resendInSeconds,
+            String otpProofToken,
             String message) {
         return new OtpVerifyResponseDto(
                 email,
@@ -502,12 +482,8 @@ public class OtpServiceImpl implements OtpService {
                 Math.max(0, attemptsRemaining),
                 Math.max(0L, expiresInSeconds),
                 Math.max(0L, resendInSeconds),
+                otpProofToken,
                 message);
-    }
-
-    private OtpConsumeResponseDto buildConsumeResult(
-            String email, String purpose, String status, boolean consumed, String message) {
-        return new OtpConsumeResponseDto(email, purpose, status, consumed, message);
     }
 
     private String normalizeEmail(String email) {
@@ -541,6 +517,13 @@ public class OtpServiceImpl implements OtpService {
             throw new IllegalArgumentException("otpCode must be numeric");
         }
         return normalized;
+    }
+
+    private String normalizeClientIp(String clientIp) {
+        if (clientIp == null || clientIp.isBlank()) {
+            return "unknown";
+        }
+        return clientIp.trim();
     }
 
     private String buildDocumentId(String email, String purpose) {

@@ -12,8 +12,13 @@ import doctor.Models.Enums.TrangThaiHoatDongTaiKhoan;
 import doctor.Repositories.Interfaces.BacSiRepository;
 import doctor.Repositories.Interfaces.NguoiDungRepository;
 import doctor.Repositories.Interfaces.TaiKhoanRepository;
+import doctor.Security.LoginAttemptService;
+import doctor.Security.PasswordHashHelper;
 import doctor.Services.Interfaces.Auth.AuthService;
-import doctor.Utils.PasswordHashHelper;
+import doctor.Services.Interfaces.Auth.OtpService;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +39,8 @@ public class AuthServiceImpl implements AuthService {
     private final NguoiDungRepository nguoiDungRepository;
     private final BacSiRepository bacSiRepository;
     private final PasswordHashHelper passwordHashHelper;
+    private final OtpService otpService;
+    private final LoginAttemptService loginAttemptService;
 
     @Override
     @Transactional
@@ -50,6 +57,7 @@ public class AuthServiceImpl implements AuthService {
         String ten = requireNotBlank(request.ten(), "ten");
         String soDienThoai = normalizeSoDienThoai(request.soDienThoai());
         String email = normalizeEmail(request.email());
+        String otpProofToken = requireNotBlank(request.otpProofToken(), "otpProofToken");
         String cccd = normalizeCccd(request.cccd());
         String anhDaiDien = normalizeOptional(request.anhDaiDien());
 
@@ -57,6 +65,7 @@ public class AuthServiceImpl implements AuthService {
         validateUniqueInfo(tenDangNhap, soDienThoai, email, cccd);
 
         DoctorRegisterData doctorData = validateDoctorDataIfNeeded(vaiTro, request);
+        otpService.consumeOtpProofToken(otpProofToken, email, "REGISTER");
 
         TaiKhoan taiKhoan = new TaiKhoan();
         taiKhoan.setTenDangNhap(tenDangNhap);
@@ -105,29 +114,38 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional(readOnly = true)
-    public LoginResponseDto login(LoginRequestDto request) {
+    public LoginResponseDto login(LoginRequestDto request, String clientIp) {
         if (request == null) {
             throw new IllegalArgumentException("request is required");
         }
 
         String tenDangNhap = normalizeTenDangNhap(request.tenDangNhap());
         String matKhau = requireNotBlank(request.matKhau(), "matKhau");
+        String normalizedClientIp = normalizeClientIp(clientIp);
+
+        loginAttemptService.assertAllowed(tenDangNhap, normalizedClientIp);
 
         TaiKhoan taiKhoan =
                 taiKhoanRepository
                         .findByTenDangNhap(tenDangNhap)
-                        .orElseThrow(
-                                () ->
-                                        new IllegalArgumentException(
-                                                "Sai ten dang nhap hoac mat khau"));
+                        .orElse(null);
+
+        if (taiKhoan == null) {
+            loginAttemptService.recordFailure(tenDangNhap, normalizedClientIp);
+            throw new IllegalArgumentException("Sai ten dang nhap hoac mat khau");
+        }
 
         if (!TrangThaiHoatDongTaiKhoan.HOAT_DONG.name().equals(taiKhoan.getTrangThaiHoatDong())) {
+            loginAttemptService.recordFailure(tenDangNhap, normalizedClientIp);
             throw new IllegalArgumentException("Tai khoan khong o trang thai hoat dong");
         }
 
-        if (!passwordHashHelper.matches(matKhau, taiKhoan.getMatKhauHash())) {
+        if (!isPasswordMatchedWithMigration(taiKhoan, matKhau)) {
+            loginAttemptService.recordFailure(tenDangNhap, normalizedClientIp);
             throw new IllegalArgumentException("Sai ten dang nhap hoac mat khau");
         }
+
+        loginAttemptService.reset(tenDangNhap, normalizedClientIp);
 
         Integer maNguoiDung =
                 nguoiDungRepository
@@ -260,6 +278,51 @@ public class AuthServiceImpl implements AuthService {
             throw new IllegalArgumentException(fieldName + " is required");
         }
         return value.trim();
+    }
+
+    private String normalizeClientIp(String clientIp) {
+        if (clientIp == null || clientIp.isBlank()) {
+            return "unknown";
+        }
+        return clientIp.trim();
+    }
+
+    private boolean isPasswordMatchedWithMigration(TaiKhoan taiKhoan, String plainPassword) {
+        String storedHash = taiKhoan.getMatKhauHash();
+        if (passwordHashHelper.matches(plainPassword, storedHash)) {
+            return true;
+        }
+
+        if (!isLegacySha256Hash(storedHash)) {
+            return false;
+        }
+
+        String legacyHash = sha256Hex(plainPassword);
+        if (!legacyHash.equalsIgnoreCase(storedHash)) {
+            return false;
+        }
+
+        taiKhoan.setMatKhauHash(passwordHashHelper.hashPassword(plainPassword));
+        taiKhoanRepository.update(taiKhoan);
+        return true;
+    }
+
+    private boolean isLegacySha256Hash(String hash) {
+        return hash != null && hash.matches("^[a-fA-F0-9]{64}$");
+    }
+
+    private String sha256Hex(String value) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] bytes = digest.digest(value.getBytes(StandardCharsets.UTF_8));
+            StringBuilder builder = new StringBuilder(bytes.length * 2);
+            for (byte b : bytes) {
+                builder.append(String.format("%02x", b));
+            }
+            return builder.toString();
+        } catch (NoSuchAlgorithmException ex) {
+            throw new IllegalStateException("Cannot initialize SHA-256", ex);
+        }
     }
 
     private record DoctorRegisterData(

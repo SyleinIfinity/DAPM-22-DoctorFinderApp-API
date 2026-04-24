@@ -8,4 +8,5 @@ public record OtpVerifyResponseDto(
         int attemptsRemaining,
         long expiresInSeconds,
         long resendInSeconds,
+        String otpProofToken,
         String message) {}

@@ -9,6 +9,7 @@ public record RegisterRequestDto(
         String ten,
         String soDienThoai,
         String email,
+        String otpProofToken,
         String cccd,
         String anhDaiDien,
         String chuyenKhoa,

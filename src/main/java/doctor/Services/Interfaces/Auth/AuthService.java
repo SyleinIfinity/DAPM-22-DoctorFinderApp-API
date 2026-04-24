@@ -8,5 +8,5 @@ import doctor.Models.DTOs.Auth.Responses.RegisterResponseDto;
 public interface AuthService {
     RegisterResponseDto register(RegisterRequestDto request);
 
-    LoginResponseDto login(LoginRequestDto request);
+    LoginResponseDto login(LoginRequestDto request, String clientIp);
 }

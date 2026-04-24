@@ -1,15 +1,12 @@
 package doctor.Controllers.Auth;
 
-import doctor.Models.DTOs.Auth.Requests.ConsumeOtpRequestDto;
 import doctor.Models.DTOs.Auth.Requests.SendOtpRequestDto;
 import doctor.Models.DTOs.Auth.Requests.VerifyOtpRequestDto;
-import doctor.Models.DTOs.Auth.Responses.ErrorResponseDto;
-import doctor.Models.DTOs.Auth.Responses.OtpConsumeResponseDto;
 import doctor.Models.DTOs.Auth.Responses.OtpSendResponseDto;
 import doctor.Models.DTOs.Auth.Responses.OtpVerifyResponseDto;
 import doctor.Services.Interfaces.Auth.OtpService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -23,59 +20,42 @@ public class OtpController {
     private final OtpService otpService;
 
     @PostMapping("/send")
-    public ResponseEntity<?> sendOtp(@RequestBody SendOtpRequestDto request) {
+    public ResponseEntity<OtpSendResponseDto> sendOtp(
+            @RequestBody SendOtpRequestDto request, HttpServletRequest servletRequest) {
         if (request == null) {
-            return ResponseEntity.badRequest().body(new ErrorResponseDto("Request body is required"));
+            throw new IllegalArgumentException("Request body is required");
         }
 
-        try {
-            OtpSendResponseDto result =
-                    otpService.sendOtp(
-                            request.email(),
-                            request.purpose(),
-                            Boolean.TRUE.equals(request.forceResend()));
-            return ResponseEntity.ok(result);
-        } catch (IllegalArgumentException ex) {
-            return ResponseEntity.badRequest().body(new ErrorResponseDto(ex.getMessage()));
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ErrorResponseDto("Cannot send OTP: " + ex.getMessage()));
-        }
+        OtpSendResponseDto result =
+                otpService.sendOtp(
+                        request.email(),
+                        request.purpose(),
+                        Boolean.TRUE.equals(request.forceResend()),
+                        resolveClientIp(servletRequest));
+        return ResponseEntity.ok(result);
     }
 
     @PostMapping("/verify")
-    public ResponseEntity<?> verifyOtp(@RequestBody VerifyOtpRequestDto request) {
+    public ResponseEntity<OtpVerifyResponseDto> verifyOtp(
+            @RequestBody VerifyOtpRequestDto request, HttpServletRequest servletRequest) {
         if (request == null) {
-            return ResponseEntity.badRequest().body(new ErrorResponseDto("Request body is required"));
+            throw new IllegalArgumentException("Request body is required");
         }
 
-        try {
-            OtpVerifyResponseDto result =
-                    otpService.verifyOtp(request.email(), request.purpose(), request.otpCode());
-            return ResponseEntity.ok(result);
-        } catch (IllegalArgumentException ex) {
-            return ResponseEntity.badRequest().body(new ErrorResponseDto(ex.getMessage()));
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ErrorResponseDto("Cannot verify OTP: " + ex.getMessage()));
-        }
+        OtpVerifyResponseDto result =
+                otpService.verifyOtp(
+                        request.email(),
+                        request.purpose(),
+                        request.otpCode(),
+                        resolveClientIp(servletRequest));
+        return ResponseEntity.ok(result);
     }
 
-    @PostMapping("/consume")
-    public ResponseEntity<?> consumeOtp(@RequestBody ConsumeOtpRequestDto request) {
-        if (request == null) {
-            return ResponseEntity.badRequest().body(new ErrorResponseDto("Request body is required"));
+    private String resolveClientIp(HttpServletRequest request) {
+        String forwardedFor = request.getHeader("X-Forwarded-For");
+        if (forwardedFor != null && !forwardedFor.isBlank()) {
+            return forwardedFor.split(",")[0].trim();
         }
-
-        try {
-            OtpConsumeResponseDto result =
-                    otpService.consumeVerifiedOtp(request.email(), request.purpose());
-            return ResponseEntity.ok(result);
-        } catch (IllegalArgumentException ex) {
-            return ResponseEntity.badRequest().body(new ErrorResponseDto(ex.getMessage()));
-        } catch (RuntimeException ex) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ErrorResponseDto("Cannot consume OTP: " + ex.getMessage()));
-        }
+        return request.getRemoteAddr();
     }
 }
