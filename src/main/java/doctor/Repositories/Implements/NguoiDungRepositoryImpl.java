@@ -52,6 +52,18 @@ public class NguoiDungRepositoryImpl extends BaseRepositoryImpl<NguoiDung, Integ
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<NguoiDung> findByCccd(String cccd) {
+        String jpql = "SELECT n FROM NguoiDung n WHERE n.cccd = :cccd";
+        return entityManager
+                .createQuery(jpql, NguoiDung.class)
+                .setParameter("cccd", cccd)
+                .getResultList()
+                .stream()
+                .findFirst();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public boolean existsByEmail(String email) {
         String jpql = "SELECT COUNT(n) FROM NguoiDung n WHERE n.email = :email";
         Long count =

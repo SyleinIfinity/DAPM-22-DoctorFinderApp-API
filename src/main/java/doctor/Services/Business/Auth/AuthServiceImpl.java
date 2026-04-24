@@ -1,7 +1,12 @@
 package doctor.Services.Business.Auth;
 
 import doctor.Models.DTOs.Auth.Requests.LoginRequestDto;
-import doctor.Models.DTOs.Auth.Requests.RegisterRequestDto;
+import doctor.Models.DTOs.Auth.Requests.RegisterDoctorAccountRequestDto;
+import doctor.Models.DTOs.Auth.Requests.RegisterDoctorProfileRequestDto;
+import doctor.Models.DTOs.Auth.Requests.RegisterUserAccountRequestDto;
+import doctor.Models.DTOs.Auth.Requests.RegisterUserInfoRequestDto;
+import doctor.Models.DTOs.Auth.Responses.AccountDoctorInfoResponseDto;
+import doctor.Models.DTOs.Auth.Responses.AccountInfoResponseDto;
 import doctor.Models.DTOs.Auth.Responses.LoginResponseDto;
 import doctor.Models.DTOs.Auth.Responses.RegisterResponseDto;
 import doctor.Models.Entities.BacSi;
@@ -44,32 +49,46 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     @Transactional
-    public RegisterResponseDto register(RegisterRequestDto request) {
+    public RegisterResponseDto registerUser(RegisterUserAccountRequestDto request) {
         if (request == null) {
             throw new IllegalArgumentException("request is required");
         }
+        return registerInternal(
+                request.thongTinNguoiDung(), null, request.otpProofToken(), ROLE_NGUOI_DUNG);
+    }
 
-        String tenDangNhap = normalizeTenDangNhap(request.tenDangNhap());
-        String matKhau = requireNotBlank(request.matKhau(), "matKhau");
-        String xacNhanMatKhau = requireNotBlank(request.xacNhanMatKhau(), "xacNhanMatKhau");
-        String vaiTro = normalizeVaiTro(request.vaiTro());
-        String hoLot = requireNotBlank(request.hoLot(), "hoLot");
-        String ten = requireNotBlank(request.ten(), "ten");
-        String soDienThoai = normalizeSoDienThoai(request.soDienThoai());
-        String email = normalizeEmail(request.email());
-        String otpProofToken = requireNotBlank(request.otpProofToken(), "otpProofToken");
-        String cccd = normalizeCccd(request.cccd());
-        String anhDaiDien = normalizeOptional(request.anhDaiDien());
+    @Override
+    @Transactional
+    public RegisterResponseDto registerDoctor(RegisterDoctorAccountRequestDto request) {
+        if (request == null) {
+            throw new IllegalArgumentException("request is required");
+        }
+        return registerInternal(
+                request.thongTinNguoiDung(),
+                request.thongTinBacSi(),
+                request.otpProofToken(),
+                ROLE_BAC_SI);
+    }
 
-        validatePassword(matKhau, xacNhanMatKhau);
-        validateUniqueInfo(tenDangNhap, soDienThoai, email, cccd);
+    private RegisterResponseDto registerInternal(
+            RegisterUserInfoRequestDto userInfoRequest,
+            RegisterDoctorProfileRequestDto doctorProfileRequest,
+            String otpProofToken,
+            String vaiTro) {
+        RegisterUserInfo userInfo = validateAndNormalizeUserInfo(userInfoRequest);
+        validateUniqueInfo(
+                userInfo.tenDangNhap(),
+                userInfo.soDienThoai(),
+                userInfo.email(),
+                userInfo.cccd());
 
-        DoctorRegisterData doctorData = validateDoctorDataIfNeeded(vaiTro, request);
-        otpService.consumeOtpProofToken(otpProofToken, email, "REGISTER");
+        DoctorRegisterData doctorData = validateDoctorDataIfNeeded(vaiTro, doctorProfileRequest);
+        otpService.consumeOtpProofToken(
+                requireNotBlank(otpProofToken, "otpProofToken"), userInfo.email(), "REGISTER");
 
         TaiKhoan taiKhoan = new TaiKhoan();
-        taiKhoan.setTenDangNhap(tenDangNhap);
-        taiKhoan.setMatKhauHash(passwordHashHelper.hashPassword(matKhau));
+        taiKhoan.setTenDangNhap(userInfo.tenDangNhap());
+        taiKhoan.setMatKhauHash(passwordHashHelper.hashPassword(userInfo.matKhau()));
         taiKhoan.setVaiTro(vaiTro);
         taiKhoan.setTrangThaiHoatDong(TrangThaiHoatDongTaiKhoan.HOAT_DONG.name());
         taiKhoan.setNgayTao(LocalDateTime.now());
@@ -77,12 +96,12 @@ public class AuthServiceImpl implements AuthService {
 
         NguoiDung nguoiDung = new NguoiDung();
         nguoiDung.setMaTaiKhoan(createdTaiKhoan.getMaTaiKhoan());
-        nguoiDung.setHoLot(hoLot);
-        nguoiDung.setTen(ten);
-        nguoiDung.setSoDienThoai(soDienThoai);
-        nguoiDung.setEmail(email);
-        nguoiDung.setCccd(cccd);
-        nguoiDung.setAnhDaiDien(anhDaiDien);
+        nguoiDung.setHoLot(userInfo.hoLot());
+        nguoiDung.setTen(userInfo.ten());
+        nguoiDung.setSoDienThoai(userInfo.soDienThoai());
+        nguoiDung.setEmail(userInfo.email());
+        nguoiDung.setCccd(userInfo.cccd());
+        nguoiDung.setAnhDaiDien(userInfo.anhDaiDien());
         NguoiDung createdNguoiDung = nguoiDungRepository.insert(nguoiDung);
 
         Integer maBacSi = null;
@@ -103,7 +122,7 @@ public class AuthServiceImpl implements AuthService {
 
         return new RegisterResponseDto(
                 true,
-                "Dang ky thanh cong",
+                buildRegisterSuccessMessage(vaiTro),
                 createdTaiKhoan.getMaTaiKhoan(),
                 createdTaiKhoan.getTenDangNhap(),
                 createdTaiKhoan.getVaiTro(),
@@ -170,6 +189,63 @@ public class AuthServiceImpl implements AuthService {
                 maBacSi);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public AccountInfoResponseDto getAccountInfo(Integer maTaiKhoan) {
+        Integer normalizedMaTaiKhoan = normalizePositiveId(maTaiKhoan, "maTaiKhoan");
+        AccountProfileContext context = resolveAccountProfileContext(normalizedMaTaiKhoan);
+        TaiKhoan taiKhoan = context.taiKhoan();
+        NguoiDung nguoiDung = context.nguoiDung();
+
+        return new AccountInfoResponseDto(
+                taiKhoan.getMaTaiKhoan(),
+                taiKhoan.getTenDangNhap(),
+                taiKhoan.getVaiTro(),
+                taiKhoan.getTrangThaiHoatDong(),
+                taiKhoan.getNgayTao(),
+                nguoiDung.getMaNguoiDung(),
+                nguoiDung.getHoLot(),
+                nguoiDung.getTen(),
+                nguoiDung.getSoDienThoai(),
+                nguoiDung.getEmail(),
+                nguoiDung.getCccd(),
+                nguoiDung.getAnhDaiDien());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AccountDoctorInfoResponseDto getAccountInfoWithDoctor(Integer maTaiKhoan) {
+        Integer normalizedMaTaiKhoan = normalizePositiveId(maTaiKhoan, "maTaiKhoan");
+        AccountProfileContext context = resolveAccountProfileContext(normalizedMaTaiKhoan);
+        TaiKhoan taiKhoan = context.taiKhoan();
+        NguoiDung nguoiDung = context.nguoiDung();
+        BacSi bacSi = bacSiRepository.findByMaTaiKhoan(normalizedMaTaiKhoan).orElse(null);
+
+        return new AccountDoctorInfoResponseDto(
+                taiKhoan.getMaTaiKhoan(),
+                taiKhoan.getTenDangNhap(),
+                taiKhoan.getVaiTro(),
+                taiKhoan.getTrangThaiHoatDong(),
+                taiKhoan.getNgayTao(),
+                nguoiDung.getMaNguoiDung(),
+                nguoiDung.getHoLot(),
+                nguoiDung.getTen(),
+                nguoiDung.getSoDienThoai(),
+                nguoiDung.getEmail(),
+                nguoiDung.getCccd(),
+                nguoiDung.getAnhDaiDien(),
+                bacSi != null,
+                bacSi == null ? null : bacSi.getMaBacSi(),
+                bacSi == null ? null : bacSi.getChuyenKhoa(),
+                bacSi == null ? null : bacSi.getTrinhDoChuyenMon(),
+                bacSi == null ? null : bacSi.getLoaiHinhBacSi(),
+                bacSi == null ? null : bacSi.getTenCoSoYTe(),
+                bacSi == null ? null : bacSi.getDiaChiLamViec(),
+                bacSi == null ? null : bacSi.getMaChungChiHanhNghe(),
+                bacSi == null ? null : bacSi.getMoTaBanThan(),
+                bacSi == null ? null : bacSi.getTrangThaiHoSo());
+    }
+
     private void validatePassword(String matKhau, String xacNhanMatKhau) {
         if (matKhau.length() < 8) {
             throw new IllegalArgumentException("matKhau phai co it nhat 8 ky tu");
@@ -177,6 +253,34 @@ public class AuthServiceImpl implements AuthService {
         if (!matKhau.equals(xacNhanMatKhau)) {
             throw new IllegalArgumentException("matKhau va xacNhanMatKhau khong khop");
         }
+    }
+
+    private RegisterUserInfo validateAndNormalizeUserInfo(RegisterUserInfoRequestDto request) {
+        if (request == null) {
+            throw new IllegalArgumentException("thongTinNguoiDung is required");
+        }
+
+        String tenDangNhap = normalizeTenDangNhap(request.tenDangNhap());
+        String matKhau = requireNotBlank(request.matKhau(), "matKhau");
+        String xacNhanMatKhau = requireNotBlank(request.xacNhanMatKhau(), "xacNhanMatKhau");
+        String hoLot = requireNotBlank(request.hoLot(), "hoLot");
+        String ten = requireNotBlank(request.ten(), "ten");
+        String soDienThoai = normalizeSoDienThoai(request.soDienThoai());
+        String email = normalizeEmail(request.email());
+        String cccd = normalizeCccd(request.cccd());
+        String anhDaiDien = normalizeOptional(request.anhDaiDien());
+
+        validatePassword(matKhau, xacNhanMatKhau);
+
+        return new RegisterUserInfo(
+                tenDangNhap, matKhau, hoLot, ten, soDienThoai, email, cccd, anhDaiDien);
+    }
+
+    private String buildRegisterSuccessMessage(String vaiTro) {
+        if (ROLE_BAC_SI.equals(vaiTro)) {
+            return "Dang ky tai khoan bac si thanh cong, ho so dang cho duyet";
+        }
+        return "Dang ky tai khoan nguoi dung thanh cong";
     }
 
     private void validateUniqueInfo(
@@ -196,9 +300,12 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private DoctorRegisterData validateDoctorDataIfNeeded(
-            String vaiTro, RegisterRequestDto request) {
+            String vaiTro, RegisterDoctorProfileRequestDto request) {
         if (!ROLE_BAC_SI.equals(vaiTro)) {
             return null;
+        }
+        if (request == null) {
+            throw new IllegalArgumentException("thongTinBacSi is required");
         }
 
         String chuyenKhoa = requireNotBlank(request.chuyenKhoa(), "chuyenKhoa");
@@ -256,15 +363,6 @@ public class AuthServiceImpl implements AuthService {
         return normalized;
     }
 
-    private String normalizeVaiTro(String vaiTro) {
-        String normalized = requireNotBlank(vaiTro, "vaiTro").toUpperCase();
-        return switch (normalized) {
-            case "NGUOI_DUNG", "NGUOIDUNG", "USER" -> ROLE_NGUOI_DUNG;
-            case "BAC_SI", "BACSI", "DOCTOR" -> ROLE_BAC_SI;
-            default -> throw new IllegalArgumentException("vaiTro khong hop le");
-        };
-    }
-
     private String normalizeOptional(String value) {
         if (value == null) {
             return null;
@@ -280,11 +378,33 @@ public class AuthServiceImpl implements AuthService {
         return value.trim();
     }
 
+    private Integer normalizePositiveId(Integer id, String fieldName) {
+        if (id == null || id <= 0) {
+            throw new IllegalArgumentException(fieldName + " is required");
+        }
+        return id;
+    }
+
     private String normalizeClientIp(String clientIp) {
         if (clientIp == null || clientIp.isBlank()) {
             return "unknown";
         }
         return clientIp.trim();
+    }
+
+    private AccountProfileContext resolveAccountProfileContext(Integer maTaiKhoan) {
+        TaiKhoan taiKhoan =
+                taiKhoanRepository
+                        .selectById(maTaiKhoan)
+                        .orElseThrow(() -> new IllegalArgumentException("Tai khoan khong ton tai"));
+
+        NguoiDung nguoiDung =
+                nguoiDungRepository
+                        .findByMaTaiKhoan(maTaiKhoan)
+                        .orElseThrow(
+                                () -> new IllegalArgumentException("Thong tin nguoi dung khong ton tai"));
+
+        return new AccountProfileContext(taiKhoan, nguoiDung);
     }
 
     private boolean isPasswordMatchedWithMigration(TaiKhoan taiKhoan, String plainPassword) {
@@ -333,4 +453,16 @@ public class AuthServiceImpl implements AuthService {
             String diaChiLamViec,
             String maChungChiHanhNghe,
             String moTaBanThan) {}
+
+    private record RegisterUserInfo(
+            String tenDangNhap,
+            String matKhau,
+            String hoLot,
+            String ten,
+            String soDienThoai,
+            String email,
+            String cccd,
+            String anhDaiDien) {}
+
+    private record AccountProfileContext(TaiKhoan taiKhoan, NguoiDung nguoiDung) {}
 }

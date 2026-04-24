@@ -20,7 +20,8 @@ public class SecurityConfig {
                                         .permitAll()
                                         .requestMatchers(
                                                 "/api/auth/login",
-                                                "/api/auth/register",
+                                                "/api/auth/register/user",
+                                                "/api/auth/register/doctor",
                                                 "/api/auth/otp/send",
                                                 "/api/auth/otp/verify")
                                         .permitAll()

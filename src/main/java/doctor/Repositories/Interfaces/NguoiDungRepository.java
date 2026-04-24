@@ -10,6 +10,8 @@ public interface NguoiDungRepository extends BaseRepository<NguoiDung, Integer> 
 
     Optional<NguoiDung> findBySoDienThoai(String soDienThoai);
 
+    Optional<NguoiDung> findByCccd(String cccd);
+
     boolean existsByEmail(String email);
 
     boolean existsBySoDienThoai(String soDienThoai);
