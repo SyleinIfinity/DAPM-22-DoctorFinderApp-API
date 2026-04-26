@@ -1,6 +1,7 @@
 package doctor.Services.Business.Doctors;
 
 import doctor.Models.DTOs.Doctors.Requests.UpdateDoctorProfileRequestDto;
+import doctor.Models.DTOs.Doctors.Responses.DoctorImageSearchResultDto;
 import doctor.Models.DTOs.Doctors.Responses.DoctorProfileResponseDto;
 import doctor.Models.Entities.BacSi;
 import doctor.Models.Entities.NguoiDung;
@@ -10,7 +11,11 @@ import doctor.Repositories.Interfaces.BacSiRepository;
 import doctor.Repositories.Interfaces.NguoiDungRepository;
 import doctor.Repositories.Interfaces.TaiKhoanRepository;
 import doctor.Services.Interfaces.Doctors.DoctorService;
+import doctor.Utils.GeminiEmbeddingHelper;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +26,13 @@ public class DoctorServiceImpl implements DoctorService {
     private final BacSiRepository bacSiRepository;
     private final NguoiDungRepository nguoiDungRepository;
     private final TaiKhoanRepository taiKhoanRepository;
+    private final GeminiEmbeddingHelper geminiEmbeddingHelper;
+
+    @Value("${app.ai.doctor-image-search.max-candidates:30}")
+    private int maxCandidates = 30;
+
+    @Value("${app.ai.doctor-image-search.default-limit:5}")
+    private int defaultResultLimit = 5;
 
     @Override
     @Transactional(readOnly = true)
@@ -80,6 +92,57 @@ public class DoctorServiceImpl implements DoctorService {
                         normalizedOffset)
                 .stream()
                 .map(this::mapToDoctorProfile)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DoctorImageSearchResultDto> searchDoctorsByImage(
+            byte[] imageBytes, String mimeType, Integer limit) {
+        if (imageBytes == null || imageBytes.length == 0) {
+            throw new IllegalArgumentException("imageBytes is required");
+        }
+
+        int normalizedLimit =
+                limit == null ? Math.max(1, defaultResultLimit) : Math.max(1, normalizeLimit(limit));
+        int normalizedMaxCandidates = Math.max(1, maxCandidates);
+
+        double[] queryEmbedding = geminiEmbeddingHelper.embedImage(imageBytes, mimeType);
+
+        List<BacSi> doctors = bacSiRepository.selectAll();
+        if (doctors.size() > normalizedMaxCandidates) {
+            doctors = doctors.subList(0, normalizedMaxCandidates);
+        }
+
+        List<DoctorImageSimilarity> scoredDoctors = new ArrayList<>();
+        for (BacSi bacSi : doctors) {
+            NguoiDung nguoiDung = nguoiDungRepository.findByMaTaiKhoan(bacSi.getMaTaiKhoan()).orElse(null);
+            if (nguoiDung == null) {
+                continue;
+            }
+
+            String avatarUrl = normalizeOptional(nguoiDung.getAnhDaiDien());
+            if (avatarUrl == null) {
+                continue;
+            }
+
+            try {
+                double[] doctorEmbedding = geminiEmbeddingHelper.embedImageFromUrl(avatarUrl);
+                double similarityScore = cosineSimilarity(queryEmbedding, doctorEmbedding);
+                scoredDoctors.add(new DoctorImageSimilarity(bacSi, similarityScore, avatarUrl));
+            } catch (RuntimeException ignored) {
+            }
+        }
+
+        return scoredDoctors.stream()
+                .sorted(Comparator.comparingDouble(DoctorImageSimilarity::similarityScore).reversed())
+                .limit(normalizedLimit)
+                .map(
+                        item ->
+                                new DoctorImageSearchResultDto(
+                                        mapToDoctorProfile(item.bacSi()),
+                                        item.similarityScore(),
+                                        item.matchedImageUrl()))
                 .toList();
     }
 
@@ -227,4 +290,30 @@ public class DoctorServiceImpl implements DoctorService {
         String normalized = value.trim();
         return normalized.isBlank() ? null : normalized;
     }
+
+    private double cosineSimilarity(double[] a, double[] b) {
+        int dimensions = Math.min(a.length, b.length);
+        if (dimensions == 0) {
+            return 0D;
+        }
+
+        double dot = 0D;
+        double normA = 0D;
+        double normB = 0D;
+        for (int i = 0; i < dimensions; i++) {
+            double x = a[i];
+            double y = b[i];
+            dot += x * y;
+            normA += x * x;
+            normB += y * y;
+        }
+
+        if (normA == 0D || normB == 0D) {
+            return 0D;
+        }
+
+        return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+    }
+
+    private record DoctorImageSimilarity(BacSi bacSi, double similarityScore, String matchedImageUrl) {}
 }

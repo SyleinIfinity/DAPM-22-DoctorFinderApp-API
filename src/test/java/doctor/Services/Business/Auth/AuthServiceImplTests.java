@@ -20,6 +20,7 @@ import doctor.Repositories.Interfaces.TaiKhoanRepository;
 import doctor.Security.LoginAttemptService;
 import doctor.Security.PasswordHashHelper;
 import doctor.Services.Interfaces.Auth.OtpService;
+import doctor.Services.Interfaces.DoctorDocuments.DoctorDocumentService;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import org.junit.jupiter.api.Assertions;
@@ -34,6 +35,7 @@ class AuthServiceImplTests {
     private final PasswordHashHelper passwordHashHelper = Mockito.mock(PasswordHashHelper.class);
     private final OtpService otpService = Mockito.mock(OtpService.class);
     private final LoginAttemptService loginAttemptService = Mockito.mock(LoginAttemptService.class);
+    private final DoctorDocumentService doctorDocumentService = Mockito.mock(DoctorDocumentService.class);
 
     private final AuthServiceImpl authService =
             new AuthServiceImpl(
@@ -42,7 +44,8 @@ class AuthServiceImplTests {
                     bacSiRepository,
                     passwordHashHelper,
                     otpService,
-                    loginAttemptService);
+                    loginAttemptService,
+                    doctorDocumentService);
 
     @Test
     void registerNguoiDung_shouldCreateTaiKhoanAndNguoiDung() {

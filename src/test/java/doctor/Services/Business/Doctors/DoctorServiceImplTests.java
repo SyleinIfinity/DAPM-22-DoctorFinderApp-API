@@ -1,6 +1,7 @@
 package doctor.Services.Business.Doctors;
 
 import doctor.Models.DTOs.Doctors.Requests.UpdateDoctorProfileRequestDto;
+import doctor.Models.DTOs.Doctors.Responses.DoctorImageSearchResultDto;
 import doctor.Models.DTOs.Doctors.Responses.DoctorProfileResponseDto;
 import doctor.Models.Entities.BacSi;
 import doctor.Models.Entities.NguoiDung;
@@ -8,18 +9,25 @@ import doctor.Models.Entities.TaiKhoan;
 import doctor.Repositories.Interfaces.BacSiRepository;
 import doctor.Repositories.Interfaces.NguoiDungRepository;
 import doctor.Repositories.Interfaces.TaiKhoanRepository;
+import doctor.Utils.GeminiEmbeddingHelper;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 
 class DoctorServiceImplTests {
     private final BacSiRepository bacSiRepository = Mockito.mock(BacSiRepository.class);
     private final NguoiDungRepository nguoiDungRepository = Mockito.mock(NguoiDungRepository.class);
     private final TaiKhoanRepository taiKhoanRepository = Mockito.mock(TaiKhoanRepository.class);
+    private final GeminiEmbeddingHelper geminiEmbeddingHelper = Mockito.mock(GeminiEmbeddingHelper.class);
     private final DoctorServiceImpl doctorService =
-            new DoctorServiceImpl(bacSiRepository, nguoiDungRepository, taiKhoanRepository);
+            new DoctorServiceImpl(
+                    bacSiRepository,
+                    nguoiDungRepository,
+                    taiKhoanRepository,
+                    geminiEmbeddingHelper);
 
     @Test
     void getDoctorProfileById_shouldReturnMappedDoctorProfile() {
@@ -82,6 +90,40 @@ class DoctorServiceImplTests {
         Assertions.assertEquals(1, result.size());
         Assertions.assertEquals(55, result.get(0).maBacSi());
         Assertions.assertEquals("DA_DUYET", result.get(0).trangThaiHoSo());
+    }
+
+    @Test
+    void searchDoctorsByImage_shouldReturnSortedResults() {
+        BacSi firstDoctor = createDoctorEntity(55, 10, "CCHN-001");
+        BacSi secondDoctor = createDoctorEntity(77, 20, "CCHN-002");
+
+        TaiKhoan firstAccount = createAccountEntity(10, "doctor01");
+        TaiKhoan secondAccount = createAccountEntity(20, "doctor02");
+
+        NguoiDung firstUser = createUserEntity(99, 10, "Tran", "Nam");
+        NguoiDung secondUser = createUserEntity(199, 20, "Le", "Binh");
+        firstUser.setAnhDaiDien("https://img/doctor-1.png");
+        secondUser.setAnhDaiDien("https://img/doctor-2.png");
+
+        Mockito.when(geminiEmbeddingHelper.embedImage(ArgumentMatchers.any(byte[].class), Mockito.eq("image/jpeg")))
+                .thenReturn(new double[] {1.0, 0.0});
+        Mockito.when(geminiEmbeddingHelper.embedImageFromUrl("https://img/doctor-1.png"))
+                .thenReturn(new double[] {0.9, 0.1});
+        Mockito.when(geminiEmbeddingHelper.embedImageFromUrl("https://img/doctor-2.png"))
+                .thenReturn(new double[] {0.1, 0.9});
+
+        Mockito.when(bacSiRepository.selectAll()).thenReturn(List.of(firstDoctor, secondDoctor));
+        Mockito.when(nguoiDungRepository.findByMaTaiKhoan(10)).thenReturn(Optional.of(firstUser));
+        Mockito.when(nguoiDungRepository.findByMaTaiKhoan(20)).thenReturn(Optional.of(secondUser));
+        Mockito.when(taiKhoanRepository.selectById(10)).thenReturn(Optional.of(firstAccount));
+        Mockito.when(taiKhoanRepository.selectById(20)).thenReturn(Optional.of(secondAccount));
+
+        List<DoctorImageSearchResultDto> result =
+                doctorService.searchDoctorsByImage(new byte[] {1, 2, 3}, "image/jpeg", 2);
+
+        Assertions.assertEquals(2, result.size());
+        Assertions.assertEquals(55, result.get(0).bacSi().maBacSi());
+        Assertions.assertTrue(result.get(0).similarityScore() > result.get(1).similarityScore());
     }
 
     private BacSi createDoctorEntity(Integer maBacSi, Integer maTaiKhoan, String cchn) {
