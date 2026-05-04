@@ -1,0 +1,22 @@
+[Unit]
+Description=DAPM Finder Doctor Backend (Spring Boot)
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=sylein
+WorkingDirectory=/home/sylein/backend
+EnvironmentFile=/home/sylein/backend/.env
+Environment=SERVER_PORT=8080
+Environment=SERVER_FORWARD_HEADERS_STRATEGY=framework
+ExecStart=/home/sylein/.sdkman/candidates/java/21.0.2-tem/bin/java -jar /home/sylein/backend/build/libs/backend-0.0.1-SNAPSHOT.jar
+Restart=on-failure
+RestartSec=5
+SuccessExitStatus=143
+TimeoutStopSec=20
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target
+

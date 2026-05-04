@@ -300,7 +300,7 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
     private List<WorkingScheduleSlotResponseDto> createChiTietSlots(LichLamViec created, NormalizedItem item) {
         List<WorkingScheduleSlotResponseDto> result = new ArrayList<>();
         LocalTime slotStart = item.gioBatDau();
-        for (int i = 0; i < item.soLuongToiDa(); i++) {
+        while (true) {
             LocalTime slotEnd = slotStart.plusMinutes(item.thoiLuongPhut());
             if (slotEnd.isAfter(item.gioKetThuc())) {
                 break;

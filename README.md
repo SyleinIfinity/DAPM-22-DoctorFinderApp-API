@@ -10,9 +10,17 @@ Never commit SMTP credentials into source code.
 4. Rewrite Git history if secret was pushed before (BFG/filter-repo), then force-push.
 
 ## Local environment variables (example)
-Use values from `./.env.example`:
+Copy `./.env.example` to `./.env` (git-ignored) and fill in values:
 
 ```env
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:55432/dapm-doctor
+SPRING_DATASOURCE_USERNAME=admin
+SPRING_DATASOURCE_PASSWORD=your-db-password
+
+CLOUDINARY_CLOUD_NAME=your-cloud-name
+CLOUDINARY_API_KEY=your-api-key
+CLOUDINARY_API_SECRET=your-api-secret
+
 SPRING_MAIL_HOST=smtp.gmail.com
 SPRING_MAIL_PORT=587
 SPRING_MAIL_USERNAME=your-gmail@gmail.com
