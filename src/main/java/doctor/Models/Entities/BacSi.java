@@ -6,6 +6,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -49,5 +50,9 @@ public class BacSi {
 
     @Column(name = "trangthaihoso", nullable = false, length = 50)
     private String trangThaiHoSo;
+
+    /** Thời điểm hồ sơ được duyệt (admin), phục vụ feed & báo cáo */
+    @Column(name = "ngayduyethoso")
+    private LocalDateTime ngayDuyetHoSo;
 }
 

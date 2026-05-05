@@ -13,6 +13,7 @@ import doctor.Repositories.Interfaces.BacSiRepository;
 import doctor.Repositories.Interfaces.NguoiDungRepository;
 import doctor.Repositories.Interfaces.TaiLieuBacSiRepository;
 import doctor.Services.Interfaces.Admin.AdminDoctorService;
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -103,6 +104,7 @@ public class AdminDoctorServiceImpl implements AdminDoctorService {
         }
 
         bacSi.setTrangThaiHoSo(TrangThaiHoSoBacSi.DA_DUYET.name());
+        bacSi.setNgayDuyetHoSo(LocalDateTime.now());
         BacSi updated = bacSiRepository.update(bacSi);
         return new AdminDoctorProfileActionResponseDto(
                 true, "Phe duyet ho so bac si thanh cong", normalizedMaBacSi, updated.getTrangThaiHoSo(), null);

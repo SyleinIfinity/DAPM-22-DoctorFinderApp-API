@@ -3,6 +3,7 @@ package doctor.Controllers.Doctors;
 import doctor.Models.DTOs.Doctors.Requests.UpdateDoctorProfileRequestDto;
 import doctor.Models.DTOs.Doctors.Responses.DoctorImageSearchResultDto;
 import doctor.Models.DTOs.Doctors.Responses.DoctorProfileResponseDto;
+import doctor.Services.Interfaces.Doctors.DoctorProfileAnalyticsService;
 import doctor.Services.Interfaces.Doctors.DoctorService;
 import java.io.IOException;
 import java.util.List;
@@ -25,6 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class DoctorController {
     private final DoctorService doctorService;
+    private final DoctorProfileAnalyticsService doctorProfileAnalyticsService;
 
     @GetMapping
     public ResponseEntity<List<DoctorProfileResponseDto>> getAllDoctors() {
@@ -32,8 +34,12 @@ public class DoctorController {
     }
 
     @GetMapping("/{maBacSi}")
-    public ResponseEntity<DoctorProfileResponseDto> getDoctorById(@PathVariable Integer maBacSi) {
-        return ResponseEntity.ok(doctorService.getDoctorProfileById(maBacSi));
+    public ResponseEntity<DoctorProfileResponseDto> getDoctorById(
+            @PathVariable Integer maBacSi,
+            @RequestParam(required = false) Integer viewerMaTaiKhoan) {
+        DoctorProfileResponseDto dto = doctorService.getDoctorProfileById(maBacSi);
+        doctorProfileAnalyticsService.logProfileView(maBacSi, viewerMaTaiKhoan);
+        return ResponseEntity.ok(dto);
     }
 
     @GetMapping("/by-account/{maTaiKhoan}")
@@ -49,7 +55,9 @@ public class DoctorController {
             @RequestParam(required = false) String diaChiLamViec,
             @RequestParam(required = false) String trangThaiHoSo,
             @RequestParam(required = false) Integer limit,
-            @RequestParam(required = false) Integer offset) {
+            @RequestParam(required = false) Integer offset,
+            @RequestParam(required = false) Integer viewerMaTaiKhoan) {
+        doctorProfileAnalyticsService.logSearch(keyword, chuyenKhoa, viewerMaTaiKhoan);
         return ResponseEntity.ok(
                 doctorService.searchDoctors(
                         keyword, chuyenKhoa, diaChiLamViec, trangThaiHoSo, limit, offset));
