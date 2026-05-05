@@ -24,10 +24,10 @@ public class LichSuTimKiemBacSi {
     @Column(name = "ma")
     private Integer ma;
 
-    @Column(name = "tu_khoa", columnDefinition = "TEXT")
+    @Column(name = "tukhoa", columnDefinition = "TEXT")
     private String tuKhoa;
 
-    @Column(name = "chuyen_khoa", columnDefinition = "TEXT")
+    @Column(name = "chuyenkhoa", columnDefinition = "TEXT")
     private String chuyenKhoa;
 
     @Column(name = "mataikhoan")
