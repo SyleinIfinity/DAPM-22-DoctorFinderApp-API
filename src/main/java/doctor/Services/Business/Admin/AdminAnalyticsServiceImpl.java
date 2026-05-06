@@ -252,11 +252,11 @@ public class AdminAnalyticsServiceImpl implements AdminAnalyticsService {
                 em.createNativeQuery(
                         """
                         SELECT kw, COUNT(*) AS cnt FROM (
-                          SELECT NULLIF(TRIM(tu_khoa), '') AS kw
+                          SELECT NULLIF(TRIM(tukhoa), '') AS kw
                             FROM lich_su_tim_kiem_bac_si
                            WHERE thoigian BETWEEN :from AND :to
                           UNION ALL
-                          SELECT NULLIF(TRIM(chuyen_khoa), '') AS kw
+                          SELECT NULLIF(TRIM(chuyenkhoa), '') AS kw
                             FROM lich_su_tim_kiem_bac_si
                            WHERE thoigian BETWEEN :from AND :to
                         ) t
