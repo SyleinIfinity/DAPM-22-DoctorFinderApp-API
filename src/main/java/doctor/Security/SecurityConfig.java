@@ -77,7 +77,8 @@ public class SecurityConfig {
                                                 "/api/auth/register/user",
                                                 "/api/auth/register/doctor",
                                                 "/api/auth/otp/send",
-                                                "/api/auth/otp/verify")
+                                            "/api/auth/otp/verify",
+                                            "/api/storage/minh-chung/**")
                                         .permitAll()
                                         .anyRequest()
                                         .authenticated())

@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -43,5 +44,14 @@ public class DoctorDocumentController {
             @PathVariable Integer maBacSi, @PathVariable Integer maTaiLieu) {
         return ResponseEntity.ok(doctorDocumentService.deleteDocument(maBacSi, maTaiLieu));
     }
-}
 
+    @PutMapping(value = "/{maTaiLieu}", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<DoctorDocumentResponseDto> updateDocument(
+            @PathVariable Integer maBacSi,
+            @PathVariable Integer maTaiLieu,
+            @RequestParam String tieuDeTaiLieu,
+            @RequestPart("file") MultipartFile file) {
+        return ResponseEntity.ok(
+                doctorDocumentService.updateDocument(maBacSi, maTaiLieu, tieuDeTaiLieu, file));
+    }
+}

@@ -15,8 +15,6 @@ public class CloudinaryFileUploadHelper {
     public static final String ROOT = "DAPM";
     public static final String AVATAR_USER_FOLDER = ROOT + "/avatar/User";
     public static final String AVATAR_DOCTOR_FOLDER = ROOT + "/avatar/Doctor";
-    public static final String CHAT_FOLDER = ROOT + "/chat";
-    public static final String MINH_CHUNG_FOLDER = ROOT + "/MinhChung";
 
     private final Cloudinary cloudinary;
 
@@ -49,14 +47,6 @@ public class CloudinaryFileUploadHelper {
 
     public UploadResult uploadDoctorAvatar(MultipartFile file) throws IOException {
         return uploadImage(file, AVATAR_DOCTOR_FOLDER);
-    }
-
-    public UploadResult uploadChatImage(MultipartFile file) throws IOException {
-        return uploadImage(file, CHAT_FOLDER);
-    }
-
-    public UploadResult uploadMinhChung(MultipartFile file) throws IOException {
-        return uploadImage(file, MINH_CHUNG_FOLDER);
     }
 
     public UploadResult uploadImage(MultipartFile file, String folder) throws IOException {

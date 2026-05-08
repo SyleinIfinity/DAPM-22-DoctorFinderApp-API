@@ -10,6 +10,8 @@ public interface DoctorDocumentService {
 
     List<DoctorDocumentResponseDto> getDocuments(Integer maBacSi);
 
+    DoctorDocumentResponseDto updateDocument(Integer maBacSi, Integer maTaiLieu, String tieuDeTaiLieu, MultipartFile file);
+
     DoctorDocumentDeleteResponseDto deleteDocument(Integer maBacSi, Integer maTaiLieu);
 }
 

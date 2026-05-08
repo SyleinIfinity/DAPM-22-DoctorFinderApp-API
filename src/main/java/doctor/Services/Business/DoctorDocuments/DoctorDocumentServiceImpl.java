@@ -6,8 +6,8 @@ import doctor.Models.Entities.BacSi;
 import doctor.Models.Entities.TaiLieuBacSi;
 import doctor.Repositories.Interfaces.BacSiRepository;
 import doctor.Repositories.Interfaces.TaiLieuBacSiRepository;
+import doctor.Services.Business.Storage.MinhChungStorageService;
 import doctor.Services.Interfaces.DoctorDocuments.DoctorDocumentService;
-import doctor.Utils.CloudinaryFileUploadHelper;
 import java.io.IOException;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +20,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class DoctorDocumentServiceImpl implements DoctorDocumentService {
     private final BacSiRepository bacSiRepository;
     private final TaiLieuBacSiRepository taiLieuBacSiRepository;
-    private final CloudinaryFileUploadHelper cloudinaryFileUploadHelper;
+    private final MinhChungStorageService minhChungStorageService;
 
     @Override
     @Transactional
@@ -37,9 +37,12 @@ public class DoctorDocumentServiceImpl implements DoctorDocumentService {
 
         requireBacSi(normalizedMaBacSi);
 
-        CloudinaryFileUploadHelper.UploadResult upload;
+        Integer documentIndex = taiLieuBacSiRepository.findByMaBacSi(normalizedMaBacSi).size() + 1;
+
+        MinhChungStorageService.UploadResult upload;
         try {
-            upload = cloudinaryFileUploadHelper.uploadMinhChung(file);
+            upload = minhChungStorageService.uploadMinhChung(
+                    normalizedMaBacSi, normalizedTieuDe, documentIndex, file);
         } catch (IOException ex) {
             throw new IllegalStateException("Khong the upload minh chung", ex);
         }
@@ -68,6 +71,59 @@ public class DoctorDocumentServiceImpl implements DoctorDocumentService {
 
     @Override
     @Transactional
+    public DoctorDocumentResponseDto updateDocument(Integer maBacSi, Integer maTaiLieu, String tieuDeTaiLieu, MultipartFile file) {
+        Integer normalizedMaBacSi = normalizePositiveId(maBacSi, "maBacSi");
+        Integer normalizedMaTaiLieu = normalizePositiveId(maTaiLieu, "maTaiLieu");
+        String normalizedTieuDe = requireNotBlank(tieuDeTaiLieu, "tieuDeTaiLieu");
+        if (normalizedTieuDe.length() > 100) {
+            throw new IllegalArgumentException("tieuDeTaiLieu toi da 100 ky tu");
+        }
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("file is required");
+        }
+        
+        requireBacSi(normalizedMaBacSi);
+
+        TaiLieuBacSi existing = taiLieuBacSiRepository
+                .selectById(normalizedMaTaiLieu)
+                .orElseThrow(() -> new IllegalArgumentException("Tai lieu khong ton tai"));
+
+        if (!normalizedMaBacSi.equals(existing.getMaBacSi())) {
+            throw new IllegalArgumentException("Tai lieu khong thuoc bac si nay");
+        }
+
+        // Delete old file
+        if (existing.getDuongDanFileUrl() != null && !existing.getDuongDanFileUrl().isBlank()) {
+            try {
+                minhChungStorageService.deleteByUrl(existing.getDuongDanFileUrl());
+            } catch (IOException ignored) {
+                // Continue with update even if deletion fails
+            }
+        }
+
+        // Upload new file
+        Integer documentIndex = resolveDocumentIndex(normalizedMaBacSi, normalizedMaTaiLieu);
+        MinhChungStorageService.UploadResult upload;
+        try {
+            upload = minhChungStorageService.uploadMinhChung(
+                    normalizedMaBacSi, normalizedTieuDe, documentIndex, file);
+        } catch (IOException ex) {
+            throw new IllegalStateException("Khong the cap nhat minh chung", ex);
+        }
+        if (upload == null || upload.getUrl() == null || upload.getUrl().isBlank()) {
+            throw new IllegalStateException("Khong the cap nhat minh chung");
+        }
+
+        // Update entity
+        existing.setTieuDeTaiLieu(normalizedTieuDe);
+        existing.setDuongDanFileUrl(upload.getUrl());
+
+        TaiLieuBacSi updated = taiLieuBacSiRepository.update(existing);
+        return mapToResponse(updated);
+    }
+
+    @Override
+    @Transactional
     public DoctorDocumentDeleteResponseDto deleteDocument(Integer maBacSi, Integer maTaiLieu) {
         Integer normalizedMaBacSi = normalizePositiveId(maBacSi, "maBacSi");
         Integer normalizedMaTaiLieu = normalizePositiveId(maTaiLieu, "maTaiLieu");
@@ -85,10 +141,9 @@ public class DoctorDocumentServiceImpl implements DoctorDocumentService {
         taiLieuBacSiRepository.deleteById(normalizedMaTaiLieu);
 
         boolean deletedFromStorage = false;
-        String publicId = tryExtractCloudinaryPublicId(existing.getDuongDanFileUrl());
-        if (publicId != null) {
+        if (existing.getDuongDanFileUrl() != null && !existing.getDuongDanFileUrl().isBlank()) {
             try {
-                deletedFromStorage = cloudinaryFileUploadHelper.deleteImage(publicId);
+                deletedFromStorage = minhChungStorageService.deleteByUrl(existing.getDuongDanFileUrl());
             } catch (IOException ignored) {
                 deletedFromStorage = false;
             }
@@ -134,54 +189,14 @@ public class DoctorDocumentServiceImpl implements DoctorDocumentService {
         return value.trim();
     }
 
-    private String tryExtractCloudinaryPublicId(String url) {
-        if (url == null || url.isBlank()) {
-            return null;
-        }
-
-        String withoutQuery = url.split("\\?")[0];
-        int uploadIndex = withoutQuery.indexOf("/upload/");
-        if (uploadIndex < 0) {
-            return null;
-        }
-
-        String path = withoutQuery.substring(uploadIndex + "/upload/".length());
-        if (path.isBlank()) {
-            return null;
-        }
-
-        String[] segments = path.split("/");
-        int startIdx = 0;
-        for (int i = 0; i < segments.length; i++) {
-            if (segments[i] != null && segments[i].matches("v\\d+")) {
-                startIdx = i + 1;
-                break;
+    private Integer resolveDocumentIndex(Integer maBacSi, Integer maTaiLieu) {
+        List<TaiLieuBacSi> documents = taiLieuBacSiRepository.findByMaBacSi(maBacSi);
+        for (int index = 0; index < documents.size(); index++) {
+            TaiLieuBacSi document = documents.get(index);
+            if (document != null && maTaiLieu.equals(document.getMaTaiLieu())) {
+                return index + 1;
             }
         }
-
-        if (startIdx >= segments.length) {
-            return null;
-        }
-
-        StringBuilder joined = new StringBuilder();
-        for (int i = startIdx; i < segments.length; i++) {
-            String seg = segments[i];
-            if (seg == null || seg.isBlank()) {
-                continue;
-            }
-            if (joined.length() > 0) {
-                joined.append("/");
-            }
-            joined.append(seg);
-        }
-
-        String withExt = joined.toString();
-        if (withExt.isBlank()) {
-            return null;
-        }
-
-        int lastDot = withExt.lastIndexOf('.');
-        return lastDot > 0 ? withExt.substring(0, lastDot) : withExt;
+        return documents.size() + 1;
     }
 }
-
