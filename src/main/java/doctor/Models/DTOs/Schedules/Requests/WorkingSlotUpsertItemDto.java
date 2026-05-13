@@ -10,5 +10,5 @@ public record WorkingSlotUpsertItemDto(
         LocalTime gioKetThuc,
         Integer maKhungGio,
         Integer soLuongToiDa,
-        String trangThaiLich) {}
-
+        String trangThaiLich,
+        String actionScope) {}

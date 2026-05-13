@@ -1,7 +1,9 @@
 package doctor.Services.Business.Schedules;
 
+import doctor.Models.DTOs.Schedules.Requests.DoctorScheduleCalendarQueryDto;
 import doctor.Models.DTOs.Schedules.Requests.UpsertDoctorWorkingSlotsRequestDto;
 import doctor.Models.DTOs.Schedules.Requests.WorkingSlotUpsertItemDto;
+import doctor.Models.DTOs.Schedules.Responses.DoctorScheduleCalendarDayResponseDto;
 import doctor.Models.DTOs.Schedules.Responses.WorkingScheduleResponseDto;
 import doctor.Models.DTOs.Schedules.Responses.WorkingScheduleSlotResponseDto;
 import doctor.Models.DTOs.Schedules.Responses.WorkingSlotResponseDto;
@@ -49,30 +51,7 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
         LocalDate normalizedDate = requireDate(date, "date");
         requireBacSi(normalizedMaBacSi);
 
-        List<LichLamViec> schedulesForDate =
-                lichLamViecRepository.findByMaBacSiAndNgayCuThe(normalizedMaBacSi, normalizedDate).stream()
-                        .filter(this::shouldExposeSchedule)
-                        .toList();
-
-        List<LichLamViec> schedulesToUse = schedulesForDate;
-        if (schedulesToUse.isEmpty()) {
-            int thuTheoNgay = normalizeThuTrongTuanFromDate(normalizedDate);
-            List<LichLamViec> weeklySchedules = new ArrayList<>(
-                    lichLamViecRepository.findByMaBacSiAndThuTrongTuan(normalizedMaBacSi, thuTheoNgay));
-
-            Integer javaThu = convertVietnamThuToJava(thuTheoNgay);
-            if (javaThu != null) {
-                weeklySchedules.addAll(
-                        lichLamViecRepository.findByMaBacSiAndThuTrongTuan(normalizedMaBacSi, javaThu));
-            }
-
-            schedulesToUse =
-                    weeklySchedules.stream()
-                            .filter(this::shouldExposeSchedule)
-                            .sorted(Comparator.comparing(LichLamViec::getGioBatDau))
-                            .toList();
-        }
-
+        List<LichLamViec> schedulesToUse = loadSchedulesForDate(normalizedMaBacSi, normalizedDate);
         if (schedulesToUse.isEmpty()) {
             return List.of();
         }
@@ -111,6 +90,30 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<DoctorScheduleCalendarDayResponseDto> getCalendarDays(
+            Integer maBacSi, DoctorScheduleCalendarQueryDto query) {
+        Integer normalizedMaBacSi = normalizePositiveId(maBacSi, "maBacSi");
+        requireBacSi(normalizedMaBacSi);
+        if (query == null) {
+            throw new IllegalArgumentException("query is required");
+        }
+
+        LocalDate fromDate = requireDate(query.fromDate(), "fromDate");
+        LocalDate toDate = requireDate(query.toDate(), "toDate");
+        if (toDate.isBefore(fromDate)) {
+            throw new IllegalArgumentException("toDate phai sau hoac bang fromDate");
+        }
+
+        List<LichLamViec> allSchedules = lichLamViecRepository.findByMaBacSi(normalizedMaBacSi);
+        List<DoctorScheduleCalendarDayResponseDto> result = new ArrayList<>();
+        for (LocalDate current = fromDate; !current.isAfter(toDate); current = current.plusDays(1)) {
+            result.add(buildCalendarDay(allSchedules, current));
+        }
+        return result;
+    }
+
+    @Override
     @Transactional
     public List<WorkingScheduleResponseDto> upsertDoctorWorkingSlots(
             Integer maBacSi, UpsertDoctorWorkingSlotsRequestDto request) {
@@ -125,40 +128,57 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
         }
 
         List<NormalizedItem> normalizedItems = normalizeItems(request.items());
-        Set<ScheduleKey> affectedKeys = new HashSet<>();
-        for (NormalizedItem item : normalizedItems) {
-            affectedKeys.add(item.key());
-        }
-
-        cancelSchedulesForKeys(normalizedMaBacSi, affectedKeys);
-
         List<WorkingScheduleResponseDto> createdSchedules = new ArrayList<>();
         for (NormalizedItem item : normalizedItems) {
-            LichLamViec lichLamViec = new LichLamViec();
-            lichLamViec.setMaBacSi(normalizedMaBacSi);
-            lichLamViec.setThuTrongTuan(item.key().thuTrongTuan());
-            lichLamViec.setNgayCuThe(item.key().ngayCuThe());
-            lichLamViec.setGioBatDau(item.gioBatDau());
-            lichLamViec.setGioKetThuc(item.gioKetThuc());
-            lichLamViec.setMaKhungGio(item.maKhungGio());
-            lichLamViec.setSoLuongToiDa(item.soLuongToiDa());
-            lichLamViec.setTrangThaiLich(item.trangThaiLich());
+            List<LichLamViec> existingSchedules = loadSchedulesByKey(normalizedMaBacSi, item.key());
+            boolean hasExplicitAction = item.actionScope() != null;
+            boolean wantsAppend = hasExplicitAction && "APPEND".equalsIgnoreCase(item.actionScope());
+            boolean wantsReplace = hasExplicitAction && "REPLACE".equalsIgnoreCase(item.actionScope());
+            boolean shouldReplace = wantsReplace || (!wantsAppend && !existingSchedules.isEmpty());
 
-            LichLamViec created = lichLamViecRepository.insert(lichLamViec);
-            List<WorkingScheduleSlotResponseDto> createdChiTiet = createChiTietSlots(created, item);
+            if (shouldReplace) {
+                cancelExistingSchedules(existingSchedules);
+            }
+
+            LichLamViec targetSchedule = null;
+            if (wantsAppend && !existingSchedules.isEmpty()) {
+                targetSchedule = pickAppendTarget(existingSchedules, item);
+            }
+
+            if (wantsAppend && !existingSchedules.isEmpty()) {
+                targetSchedule = pickAppendTarget(existingSchedules, item);
+                extendScheduleWindow(targetSchedule, item);
+                targetSchedule.setMaKhungGio(item.maKhungGio());
+                targetSchedule.setSoLuongToiDa(Math.max(targetSchedule.getSoLuongToiDa(), item.soLuongToiDa()));
+                targetSchedule.setTrangThaiLich(item.trangThaiLich());
+                targetSchedule = lichLamViecRepository.update(targetSchedule);
+            } else {
+                targetSchedule = new LichLamViec();
+                targetSchedule.setMaBacSi(normalizedMaBacSi);
+                targetSchedule.setThuTrongTuan(item.key().thuTrongTuan());
+                targetSchedule.setNgayCuThe(item.key().ngayCuThe());
+                targetSchedule.setGioBatDau(item.gioBatDau());
+                targetSchedule.setGioKetThuc(item.gioKetThuc());
+                targetSchedule.setMaKhungGio(item.maKhungGio());
+                targetSchedule.setSoLuongToiDa(item.soLuongToiDa());
+                targetSchedule.setTrangThaiLich(item.trangThaiLich());
+                targetSchedule = lichLamViecRepository.insert(targetSchedule);
+            }
+
+            List<WorkingScheduleSlotResponseDto> createdChiTiet = createChiTietSlots(targetSchedule, item);
 
             createdSchedules.add(
                     new WorkingScheduleResponseDto(
-                            created.getMaLichLamViec(),
-                            created.getMaBacSi(),
-                            created.getThuTrongTuan(),
-                            created.getNgayCuThe(),
-                            created.getGioBatDau(),
-                            created.getGioKetThuc(),
-                            created.getMaKhungGio(),
+                            targetSchedule.getMaLichLamViec(),
+                            targetSchedule.getMaBacSi(),
+                            targetSchedule.getThuTrongTuan(),
+                            targetSchedule.getNgayCuThe(),
+                            targetSchedule.getGioBatDau(),
+                            targetSchedule.getGioKetThuc(),
+                            targetSchedule.getMaKhungGio(),
                             item.thoiLuongPhut(),
-                            created.getSoLuongToiDa(),
-                            created.getTrangThaiLich(),
+                            targetSchedule.getSoLuongToiDa(),
+                            targetSchedule.getTrangThaiLich(),
                             createdChiTiet));
         }
 
@@ -202,6 +222,7 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
                             : normalizeSoLuongToiDa(item.soLuongToiDa(), maxSlots);
 
             String trangThaiLich = normalizeTrangThaiLich(item.trangThaiLich());
+            String actionScope = normalizeOptional(item.actionScope());
             normalized.add(
                     new NormalizedItem(
                             key,
@@ -210,35 +231,86 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
                             maKhungGio,
                             thoiLuongPhut,
                             soLuongToiDa,
-                            trangThaiLich));
+                            trangThaiLich,
+                            actionScope));
         }
 
         return normalized;
     }
 
-    private void cancelSchedulesForKeys(Integer maBacSi, Set<ScheduleKey> keys) {
-        if (keys == null || keys.isEmpty()) {
+    private DoctorScheduleCalendarDayResponseDto buildCalendarDay(List<LichLamViec> allSchedules, LocalDate date) {
+        if (date.isBefore(LocalDate.now())) {
+            return new DoctorScheduleCalendarDayResponseDto(date, "NGAY_DA_QUA", 0, 0, false);
+        }
+
+        List<LichLamViec> schedules = new ArrayList<>();
+        for (LichLamViec lichLamViec : allSchedules) {
+            if (lichLamViec == null) {
+                continue;
+            }
+            if (!shouldExposeSchedule(lichLamViec)) {
+                continue;
+            }
+            if (matchesDate(lichLamViec, date)) {
+                schedules.add(lichLamViec);
+            }
+        }
+
+        if (schedules.isEmpty()) {
+            return new DoctorScheduleCalendarDayResponseDto(date, "CHUA_CO_LICH", 0, 0, false);
+        }
+
+        int totalSlots = 0;
+        boolean hasBooked = false;
+        for (LichLamViec lichLamViec : schedules) {
+            List<ChiTietLich> chiTietList = chiTietLichRepository.findByMaLichLamViec(lichLamViec.getMaLichLamViec());
+            totalSlots += chiTietList.size();
+            for (ChiTietLich chiTiet : chiTietList) {
+                if (chiTiet != null && chiTiet.getMaPhieuDatLichHienTai() != null) {
+                    hasBooked = true;
+                }
+            }
+        }
+
+        String state = hasBooked ? "DA_CO_NGUOI_DAT" : "DA_TAO_LICH";
+        return new DoctorScheduleCalendarDayResponseDto(date, state, schedules.size(), totalSlots, hasBooked);
+    }
+
+    private boolean matchesDate(LichLamViec lichLamViec, LocalDate date) {
+        if (lichLamViec == null || date == null) {
+            return false;
+        }
+        if (date.equals(lichLamViec.getNgayCuThe())) {
+            return true;
+        }
+        Integer thuTrongTuan = lichLamViec.getThuTrongTuan();
+        if (thuTrongTuan == null) {
+            return false;
+        }
+        int dateThu = normalizeThuTrongTuanFromDate(date);
+        return thuTrongTuan.equals(dateThu) || thuTrongTuan.equals(convertVietnamThuToJava(dateThu));
+    }
+
+    private void cancelExistingSchedules(List<LichLamViec> schedules) {
+        if (schedules == null || schedules.isEmpty()) {
             return;
         }
 
         LocalDateTime now = LocalDateTime.now();
-        for (ScheduleKey key : keys) {
-            List<LichLamViec> existingSchedules = loadSchedulesByKey(maBacSi, key);
-            for (LichLamViec existing : existingSchedules) {
-                if (existing == null) {
-                    continue;
-                }
-
-                String trangThai = normalizeOptional(existing.getTrangThaiLich());
-                if (TrangThaiLichLamViec.DA_HUY.name().equals(trangThai)
-                        || TrangThaiLichLamViec.DA_KET_THUC.name().equals(trangThai)) {
-                    continue;
-                }
-
-                assertScheduleCanBeCancelled(existing, now);
-                existing.setTrangThaiLich(TrangThaiLichLamViec.DA_HUY.name());
-                lichLamViecRepository.update(existing);
+        for (LichLamViec existing : schedules) {
+            if (existing == null) {
+                continue;
             }
+
+            String trangThai = normalizeOptional(existing.getTrangThaiLich());
+            if (TrangThaiLichLamViec.DA_HUY.name().equals(trangThai)
+                    || TrangThaiLichLamViec.DA_KET_THUC.name().equals(trangThai)) {
+                continue;
+            }
+
+            assertScheduleCanBeCancelled(existing, now);
+            existing.setTrangThaiLich(TrangThaiLichLamViec.DA_HUY.name());
+            lichLamViecRepository.update(existing);
         }
     }
 
@@ -299,11 +371,26 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
 
     private List<WorkingScheduleSlotResponseDto> createChiTietSlots(LichLamViec created, NormalizedItem item) {
         List<WorkingScheduleSlotResponseDto> result = new ArrayList<>();
+        List<ChiTietLich> existingSlots = chiTietLichRepository.findByMaLichLamViec(created.getMaLichLamViec());
+        Set<String> occupiedRanges = new HashSet<>();
+        for (ChiTietLich slot : existingSlots) {
+            if (slot == null || slot.getGioBatDau() == null || slot.getGioKetThuc() == null) {
+                continue;
+            }
+            occupiedRanges.add(slot.getGioBatDau() + "|" + slot.getGioKetThuc());
+        }
+
         LocalTime slotStart = item.gioBatDau();
         while (true) {
             LocalTime slotEnd = slotStart.plusMinutes(item.thoiLuongPhut());
             if (slotEnd.isAfter(item.gioKetThuc())) {
                 break;
+            }
+
+            String rangeKey = slotStart + "|" + slotEnd;
+            if (occupiedRanges.contains(rangeKey)) {
+                slotStart = slotEnd;
+                continue;
             }
 
             ChiTietLich chiTietLich = new ChiTietLich();
@@ -314,6 +401,7 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
             chiTietLich.setKhoaDen(null);
             chiTietLich.setMaPhieuDatLichHienTai(null);
             ChiTietLich createdChiTiet = chiTietLichRepository.insert(chiTietLich);
+            occupiedRanges.add(rangeKey);
 
             result.add(
                     new WorkingScheduleSlotResponseDto(
@@ -345,12 +433,76 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
         return thoiLuong;
     }
 
+    private List<LichLamViec> loadSchedulesForDate(Integer maBacSi, LocalDate date) {
+        List<LichLamViec> schedulesForDate =
+                lichLamViecRepository.findByMaBacSiAndNgayCuThe(maBacSi, date).stream()
+                        .filter(this::shouldExposeSchedule)
+                        .toList();
+
+        if (!schedulesForDate.isEmpty()) {
+            return schedulesForDate;
+        }
+
+        int thuTheoNgay = normalizeThuTrongTuanFromDate(date);
+        List<LichLamViec> weeklySchedules = new ArrayList<>(
+                lichLamViecRepository.findByMaBacSiAndThuTrongTuan(maBacSi, thuTheoNgay));
+
+        Integer javaThu = convertVietnamThuToJava(thuTheoNgay);
+        if (javaThu != null) {
+            weeklySchedules.addAll(
+                    lichLamViecRepository.findByMaBacSiAndThuTrongTuan(maBacSi, javaThu));
+        }
+
+        return weeklySchedules.stream()
+                .filter(this::shouldExposeSchedule)
+                .sorted(Comparator.comparing(LichLamViec::getGioBatDau))
+                .toList();
+    }
+
+    private LichLamViec pickAppendTarget(List<LichLamViec> existingSchedules, NormalizedItem item) {
+        if (existingSchedules == null || existingSchedules.isEmpty() || item == null) {
+            return null;
+        }
+
+        LichLamViec earliest = existingSchedules.get(0);
+        if (earliest == null) {
+            return null;
+        }
+
+        boolean sameDaySpecific = item.key().ngayCuThe() != null;
+        if (!sameDaySpecific) {
+            return earliest;
+        }
+
+        return earliest;
+    }
+
+    private void extendScheduleWindow(LichLamViec targetSchedule, NormalizedItem item) {
+        if (targetSchedule == null || item == null) {
+            return;
+        }
+
+        if (item.gioBatDau().isBefore(targetSchedule.getGioBatDau())) {
+            targetSchedule.setGioBatDau(item.gioBatDau());
+        }
+        if (item.gioKetThuc().isAfter(targetSchedule.getGioKetThuc())) {
+            targetSchedule.setGioKetThuc(item.gioKetThuc());
+        }
+    }
+
     private boolean shouldExposeSchedule(LichLamViec lichLamViec) {
         if (lichLamViec == null) {
             return false;
         }
         String trangThaiLich = normalizeOptional(lichLamViec.getTrangThaiLich());
         return !TrangThaiLichLamViec.DA_HUY.name().equals(trangThaiLich);
+    }
+
+    private boolean isOverlapping(LocalTime existingStart, LocalTime existingEnd, LocalTime newStart, LocalTime newEnd) {
+        if (existingStart == null || existingEnd == null || newStart == null || newEnd == null) {
+            return false;
+        }
+        return existingStart.isBefore(newEnd) && newStart.isBefore(existingEnd);
     }
 
     private String resolveEffectiveChiTietTrangThai(ChiTietLich chiTiet, LocalDateTime now) {
@@ -486,5 +638,6 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
             Integer maKhungGio,
             int thoiLuongPhut,
             int soLuongToiDa,
-            String trangThaiLich) {}
+            String trangThaiLich,
+            String actionScope) {}
 }

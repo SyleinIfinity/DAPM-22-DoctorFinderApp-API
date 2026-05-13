@@ -1,6 +1,8 @@
 package doctor.Controllers.Schedules;
 
+import doctor.Models.DTOs.Schedules.Requests.DoctorScheduleCalendarQueryDto;
 import doctor.Models.DTOs.Schedules.Requests.UpsertDoctorWorkingSlotsRequestDto;
+import doctor.Models.DTOs.Schedules.Responses.DoctorScheduleCalendarDayResponseDto;
 import doctor.Models.DTOs.Schedules.Responses.WorkingScheduleResponseDto;
 import doctor.Models.DTOs.Schedules.Responses.WorkingSlotResponseDto;
 import doctor.Services.Interfaces.Schedules.WorkingSlotService;
@@ -26,6 +28,16 @@ public class WorkingSlotController {
     public ResponseEntity<List<WorkingSlotResponseDto>> getWorkingSlots(
             @PathVariable Integer maBacSi, @RequestParam LocalDate date) {
         return ResponseEntity.ok(workingSlotService.getWorkingSlotsByDoctorAndDate(maBacSi, date));
+    }
+
+    @GetMapping("/calendar")
+    public ResponseEntity<List<DoctorScheduleCalendarDayResponseDto>> getCalendarDays(
+            @PathVariable Integer maBacSi,
+            @RequestParam LocalDate fromDate,
+            @RequestParam LocalDate toDate) {
+        return ResponseEntity.ok(
+                workingSlotService.getCalendarDays(
+                        maBacSi, new DoctorScheduleCalendarQueryDto(fromDate, toDate)));
     }
 
     @PutMapping

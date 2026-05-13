@@ -1,6 +1,8 @@
 package doctor.Services.Interfaces.Schedules;
 
+import doctor.Models.DTOs.Schedules.Requests.DoctorScheduleCalendarQueryDto;
 import doctor.Models.DTOs.Schedules.Requests.UpsertDoctorWorkingSlotsRequestDto;
+import doctor.Models.DTOs.Schedules.Responses.DoctorScheduleCalendarDayResponseDto;
 import doctor.Models.DTOs.Schedules.Responses.WorkingScheduleResponseDto;
 import doctor.Models.DTOs.Schedules.Responses.WorkingSlotResponseDto;
 import java.time.LocalDate;
@@ -11,5 +13,8 @@ public interface WorkingSlotService {
 
     List<WorkingScheduleResponseDto> upsertDoctorWorkingSlots(
             Integer maBacSi, UpsertDoctorWorkingSlotsRequestDto request);
+
+    List<DoctorScheduleCalendarDayResponseDto> getCalendarDays(
+            Integer maBacSi, DoctorScheduleCalendarQueryDto query);
 }
 
