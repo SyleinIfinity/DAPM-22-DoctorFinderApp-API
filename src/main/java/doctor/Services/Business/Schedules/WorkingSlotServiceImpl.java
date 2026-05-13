@@ -1,7 +1,6 @@
 package doctor.Services.Business.Schedules;
 
 import doctor.Models.DTOs.Schedules.Requests.DoctorScheduleCalendarQueryDto;
-import doctor.Models.DTOs.Schedules.Requests.UpsertDoctorWorkingSlotsRequestDto;
 import doctor.Models.DTOs.Schedules.Requests.WorkingSlotUpsertItemDto;
 import doctor.Models.DTOs.Schedules.Responses.DoctorScheduleCalendarDayResponseDto;
 import doctor.Models.DTOs.Schedules.Responses.WorkingScheduleResponseDto;
@@ -115,37 +114,54 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
 
     @Override
     @Transactional
-    public List<WorkingScheduleResponseDto> upsertDoctorWorkingSlots(
-            Integer maBacSi, UpsertDoctorWorkingSlotsRequestDto request) {
+    public List<WorkingScheduleResponseDto> createWorkingSlots(
+            Integer maBacSi, List<WorkingSlotUpsertItemDto> items) {
+        return upsertWorkingSlotsInternal(maBacSi, items, ActionMode.CREATE);
+    }
+
+    @Override
+    @Transactional
+    public List<WorkingScheduleResponseDto> updateWorkingSlots(
+            Integer maBacSi, List<WorkingSlotUpsertItemDto> items) {
+        return upsertWorkingSlotsInternal(maBacSi, items, ActionMode.UPDATE);
+    }
+
+    @Override
+    @Transactional
+    public void deleteWorkingSlots(Integer maBacSi, List<WorkingSlotUpsertItemDto> items) {
         Integer normalizedMaBacSi = normalizePositiveId(maBacSi, "maBacSi");
         requireBacSi(normalizedMaBacSi);
-
-        if (request == null) {
-            throw new IllegalArgumentException("request is required");
-        }
-        if (request.items() == null || request.items().isEmpty()) {
+        if (items == null || items.isEmpty()) {
             throw new IllegalArgumentException("items is required");
         }
 
-        List<NormalizedItem> normalizedItems = normalizeItems(request.items());
-        List<WorkingScheduleResponseDto> createdSchedules = new ArrayList<>();
+        List<NormalizedItem> normalizedItems = normalizeItems(items);
+        for (NormalizedItem item : normalizedItems) {
+            cancelExistingSchedules(loadSchedulesByKey(normalizedMaBacSi, item.key()));
+        }
+    }
+
+    private List<WorkingScheduleResponseDto> upsertWorkingSlotsInternal(
+            Integer maBacSi, List<WorkingSlotUpsertItemDto> items, ActionMode mode) {
+        Integer normalizedMaBacSi = normalizePositiveId(maBacSi, "maBacSi");
+        requireBacSi(normalizedMaBacSi);
+        if (items == null || items.isEmpty()) {
+            throw new IllegalArgumentException("items is required");
+        }
+
+        List<NormalizedItem> normalizedItems = normalizeItems(items);
+        List<WorkingScheduleResponseDto> results = new ArrayList<>();
         for (NormalizedItem item : normalizedItems) {
             List<LichLamViec> existingSchedules = loadSchedulesByKey(normalizedMaBacSi, item.key());
-            boolean hasExplicitAction = item.actionScope() != null;
-            boolean wantsAppend = hasExplicitAction && "APPEND".equalsIgnoreCase(item.actionScope());
-            boolean wantsReplace = hasExplicitAction && "REPLACE".equalsIgnoreCase(item.actionScope());
-            boolean shouldReplace = wantsReplace || (!wantsAppend && !existingSchedules.isEmpty());
+            boolean shouldAppend = mode == ActionMode.CREATE && !existingSchedules.isEmpty();
+            boolean shouldReplace = mode == ActionMode.UPDATE && !existingSchedules.isEmpty();
 
             if (shouldReplace) {
                 cancelExistingSchedules(existingSchedules);
             }
 
-            LichLamViec targetSchedule = null;
-            if (wantsAppend && !existingSchedules.isEmpty()) {
-                targetSchedule = pickAppendTarget(existingSchedules, item);
-            }
-
-            if (wantsAppend && !existingSchedules.isEmpty()) {
+            LichLamViec targetSchedule;
+            if (shouldAppend) {
                 targetSchedule = pickAppendTarget(existingSchedules, item);
                 extendScheduleWindow(targetSchedule, item);
                 targetSchedule.setMaKhungGio(item.maKhungGio());
@@ -166,8 +182,7 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
             }
 
             List<WorkingScheduleSlotResponseDto> createdChiTiet = createChiTietSlots(targetSchedule, item);
-
-            createdSchedules.add(
+            results.add(
                     new WorkingScheduleResponseDto(
                             targetSchedule.getMaLichLamViec(),
                             targetSchedule.getMaBacSi(),
@@ -182,7 +197,7 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
                             createdChiTiet));
         }
 
-        createdSchedules.sort(
+        results.sort(
                 Comparator.comparing(
                                 WorkingScheduleResponseDto::ngayCuThe,
                                 Comparator.nullsLast(Comparator.naturalOrder()))
@@ -190,7 +205,7 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
                                 WorkingScheduleResponseDto::thuTrongTuan,
                                 Comparator.nullsLast(Comparator.naturalOrder()))
                         .thenComparing(WorkingScheduleResponseDto::gioBatDau));
-        return createdSchedules;
+        return results;
     }
 
     private List<NormalizedItem> normalizeItems(List<WorkingSlotUpsertItemDto> items) {
@@ -371,26 +386,11 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
 
     private List<WorkingScheduleSlotResponseDto> createChiTietSlots(LichLamViec created, NormalizedItem item) {
         List<WorkingScheduleSlotResponseDto> result = new ArrayList<>();
-        List<ChiTietLich> existingSlots = chiTietLichRepository.findByMaLichLamViec(created.getMaLichLamViec());
-        Set<String> occupiedRanges = new HashSet<>();
-        for (ChiTietLich slot : existingSlots) {
-            if (slot == null || slot.getGioBatDau() == null || slot.getGioKetThuc() == null) {
-                continue;
-            }
-            occupiedRanges.add(slot.getGioBatDau() + "|" + slot.getGioKetThuc());
-        }
-
         LocalTime slotStart = item.gioBatDau();
         while (true) {
             LocalTime slotEnd = slotStart.plusMinutes(item.thoiLuongPhut());
             if (slotEnd.isAfter(item.gioKetThuc())) {
                 break;
-            }
-
-            String rangeKey = slotStart + "|" + slotEnd;
-            if (occupiedRanges.contains(rangeKey)) {
-                slotStart = slotEnd;
-                continue;
             }
 
             ChiTietLich chiTietLich = new ChiTietLich();
@@ -401,7 +401,6 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
             chiTietLich.setKhoaDen(null);
             chiTietLich.setMaPhieuDatLichHienTai(null);
             ChiTietLich createdChiTiet = chiTietLichRepository.insert(chiTietLich);
-            occupiedRanges.add(rangeKey);
 
             result.add(
                     new WorkingScheduleSlotResponseDto(
@@ -640,4 +639,9 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
             int soLuongToiDa,
             String trangThaiLich,
             String actionScope) {}
+
+    private enum ActionMode {
+        CREATE,
+        UPDATE
+    }
 }

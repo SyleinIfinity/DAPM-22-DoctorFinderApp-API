@@ -1,7 +1,7 @@
 package doctor.Controllers.Schedules;
 
 import doctor.Models.DTOs.Schedules.Requests.DoctorScheduleCalendarQueryDto;
-import doctor.Models.DTOs.Schedules.Requests.UpsertDoctorWorkingSlotsRequestDto;
+import doctor.Models.DTOs.Schedules.Requests.WorkingSlotUpsertItemDto;
 import doctor.Models.DTOs.Schedules.Responses.DoctorScheduleCalendarDayResponseDto;
 import doctor.Models.DTOs.Schedules.Responses.WorkingScheduleResponseDto;
 import doctor.Models.DTOs.Schedules.Responses.WorkingSlotResponseDto;
@@ -10,8 +10,10 @@ import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -40,13 +42,31 @@ public class WorkingSlotController {
                         maBacSi, new DoctorScheduleCalendarQueryDto(fromDate, toDate)));
     }
 
-    @PutMapping
-    public ResponseEntity<List<WorkingScheduleResponseDto>> upsertWorkingSlots(
-            @PathVariable Integer maBacSi, @RequestBody UpsertDoctorWorkingSlotsRequestDto request) {
-        if (request == null) {
+    @PostMapping
+    public ResponseEntity<List<WorkingScheduleResponseDto>> createWorkingSlots(
+            @PathVariable Integer maBacSi, @RequestBody List<WorkingSlotUpsertItemDto> items) {
+        if (items == null || items.isEmpty()) {
             throw new IllegalArgumentException("Request body is required");
         }
-        return ResponseEntity.ok(workingSlotService.upsertDoctorWorkingSlots(maBacSi, request));
+        return ResponseEntity.ok(workingSlotService.createWorkingSlots(maBacSi, items));
+    }
+
+    @PutMapping
+    public ResponseEntity<List<WorkingScheduleResponseDto>> updateWorkingSlots(
+            @PathVariable Integer maBacSi, @RequestBody List<WorkingSlotUpsertItemDto> items) {
+        if (items == null || items.isEmpty()) {
+            throw new IllegalArgumentException("Request body is required");
+        }
+        return ResponseEntity.ok(workingSlotService.updateWorkingSlots(maBacSi, items));
+    }
+
+    @DeleteMapping
+    public ResponseEntity<Void> deleteWorkingSlots(
+            @PathVariable Integer maBacSi, @RequestBody List<WorkingSlotUpsertItemDto> items) {
+        if (items == null || items.isEmpty()) {
+            throw new IllegalArgumentException("Request body is required");
+        }
+        workingSlotService.deleteWorkingSlots(maBacSi, items);
+        return ResponseEntity.noContent().build();
     }
 }
-
