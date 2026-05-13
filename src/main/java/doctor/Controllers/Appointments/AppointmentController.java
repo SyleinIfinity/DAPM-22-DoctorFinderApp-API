@@ -57,6 +57,12 @@ public class AppointmentController {
         return ResponseEntity.ok(appointmentService.approveAppointment(maPhieuDatLich));
     }
 
+    @PostMapping("/{maPhieuDatLich}/complete")
+    public ResponseEntity<AppointmentDetailResponseDto> markAppointmentAsCompleted(
+            @PathVariable Integer maPhieuDatLich) {
+        return ResponseEntity.ok(appointmentService.markAppointmentAsCompleted(maPhieuDatLich));
+    }
+
     @PostMapping("/{maPhieuDatLich}/reject")
     public ResponseEntity<AppointmentDetailResponseDto> rejectAppointment(
             @PathVariable Integer maPhieuDatLich,

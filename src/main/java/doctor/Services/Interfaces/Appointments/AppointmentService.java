@@ -20,6 +20,8 @@ public interface AppointmentService {
 
     AppointmentDetailResponseDto approveAppointment(Integer maPhieuDatLich);
 
+    AppointmentDetailResponseDto markAppointmentAsCompleted(Integer maPhieuDatLich);
+
     AppointmentDetailResponseDto rejectAppointment(
             Integer maPhieuDatLich, RejectAppointmentRequestDto request);
 }

@@ -12,6 +12,7 @@ public record AppointmentSummaryResponseDto(
         String trieuChungGhiChu,
         String trangThaiPhieu,
         String lyDoTuChoi,
+        boolean coTheDanhGia,
         LocalDate ngayCuThe,
         Integer thuTrongTuan,
         LocalTime gioBatDau,

@@ -9,7 +9,6 @@ import doctor.Models.Entities.DanhGiaBacSi;
 import doctor.Models.Entities.LichLamViec;
 import doctor.Models.Entities.NguoiDung;
 import doctor.Models.Entities.PhieuDatLich;
-import doctor.Models.Enums.TrangThaiLichLamViec;
 import doctor.Models.Enums.TrangThaiPhieuDatLich;
 import doctor.Repositories.Interfaces.BacSiRepository;
 import doctor.Repositories.Interfaces.ChiTietLichRepository;
@@ -18,9 +17,7 @@ import doctor.Repositories.Interfaces.LichLamViecRepository;
 import doctor.Repositories.Interfaces.NguoiDungRepository;
 import doctor.Repositories.Interfaces.PhieuDatLichRepository;
 import doctor.Services.Interfaces.Reviews.ReviewService;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -97,46 +94,10 @@ public class ReviewServiceImpl implements ReviewService {
     }
 
     private boolean hasCompletedAppointment(Integer maNguoiDung, Integer maBacSi) {
-        LocalDateTime now = LocalDateTime.now();
         return phieuDatLichRepository
-                .findByMaBacSiAndTrangThaiPhieu(maBacSi, TrangThaiPhieuDatLich.DA_XAC_NHAN.name())
+                .findByMaBacSiAndTrangThaiPhieu(maBacSi, TrangThaiPhieuDatLich.DA_KHAM.name())
                 .stream()
-                .filter(phieu -> phieu != null && maNguoiDung.equals(phieu.getMaNguoiDung()))
-                .anyMatch(phieu -> isAppointmentEnded(phieu, now));
-    }
-
-    private boolean isAppointmentEnded(PhieuDatLich phieu, LocalDateTime now) {
-        if (phieu == null || phieu.getMaChiTiet() == null) {
-            return false;
-        }
-
-        ChiTietLich chiTiet =
-                chiTietLichRepository.selectById(phieu.getMaChiTiet()).orElse(null);
-        if (chiTiet == null || chiTiet.getMaLichLamViec() == null) {
-            return false;
-        }
-
-        LichLamViec lichLamViec =
-                lichLamViecRepository.selectById(chiTiet.getMaLichLamViec()).orElse(null);
-        if (lichLamViec == null) {
-            return false;
-        }
-
-        LocalDate ngayCuThe = lichLamViec.getNgayCuThe();
-        LocalTime gioKetThuc = chiTiet.getGioKetThuc();
-        if (ngayCuThe != null && gioKetThuc != null) {
-            return LocalDateTime.of(ngayCuThe, gioKetThuc).isBefore(now);
-        }
-
-        String trangThaiLich = normalizeOptional(lichLamViec.getTrangThaiLich());
-        if (trangThaiLich == null) {
-            return false;
-        }
-        try {
-            return TrangThaiLichLamViec.valueOf(trangThaiLich).daDongVongDoi();
-        } catch (IllegalArgumentException ex) {
-            return false;
-        }
+                .anyMatch(phieu -> phieu != null && maNguoiDung.equals(phieu.getMaNguoiDung()));
     }
 
     private ReviewResponseDto mapToReviewResponseWithUserLookup(DanhGiaBacSi danhGia) {

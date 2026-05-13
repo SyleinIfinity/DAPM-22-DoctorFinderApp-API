@@ -20,6 +20,7 @@ import doctor.Repositories.Interfaces.KhungGioRepository;
 import doctor.Repositories.Interfaces.LichLamViecRepository;
 import doctor.Repositories.Interfaces.NguoiDungRepository;
 import doctor.Repositories.Interfaces.PhieuDatLichRepository;
+import doctor.Repositories.Interfaces.DanhGiaBacSiRepository;
 import doctor.Services.Interfaces.Appointments.AppointmentService;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -37,6 +38,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final KhungGioRepository khungGioRepository;
     private final BacSiRepository bacSiRepository;
     private final NguoiDungRepository nguoiDungRepository;
+    private final DanhGiaBacSiRepository danhGiaBacSiRepository;
 
     @Override
     @Transactional
@@ -101,6 +103,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                                 TrangThaiPhieuDatLich.CHO_XAC_NHAN.name(),
                                 TrangThaiPhieuDatLich.DA_XAC_NHAN.name())
                         : Set.of(
+                                TrangThaiPhieuDatLich.DA_KHAM.name(),
                                 TrangThaiPhieuDatLich.DA_HUY.name(),
                                 TrangThaiPhieuDatLich.TU_CHOI.name());
 
@@ -136,6 +139,9 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
         if (TrangThaiPhieuDatLich.TU_CHOI.name().equals(trangThai)) {
             throw new IllegalArgumentException("Phieu dat lich da bi tu choi");
+        }
+        if (TrangThaiPhieuDatLich.DA_KHAM.name().equals(trangThai)) {
+            throw new IllegalArgumentException("Phieu dat lich da kham khong the huy");
         }
 
         phieu.setTrangThaiPhieu(TrangThaiPhieuDatLich.DA_HUY.name());
@@ -193,6 +199,31 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     @Override
     @Transactional
+    public AppointmentDetailResponseDto markAppointmentAsCompleted(Integer maPhieuDatLich) {
+        Integer normalizedMaPhieuDatLich = normalizePositiveId(maPhieuDatLich, "maPhieuDatLich");
+        PhieuDatLich phieu =
+                phieuDatLichRepository
+                        .selectById(normalizedMaPhieuDatLich)
+                        .orElseThrow(() -> new IllegalArgumentException("Phieu dat lich khong ton tai"));
+
+        if (!TrangThaiPhieuDatLich.DA_XAC_NHAN.name().equals(phieu.getTrangThaiPhieu())) {
+            throw new IllegalArgumentException("Chi co the chuyen sang DA_KHAM tu trang thai DA_XAC_NHAN");
+        }
+
+        phieu.setTrangThaiPhieu(TrangThaiPhieuDatLich.DA_KHAM.name());
+        phieu.setLyDoTuChoi(null);
+
+        try {
+            phieu = phieuDatLichRepository.update(phieu);
+        } catch (RuntimeException ex) {
+            throw translateLockSlotException(ex, "Khong the cap nhat trang thai phieu dat lich");
+        }
+
+        return mapToAppointmentDetail(phieu);
+    }
+
+    @Override
+    @Transactional
     public AppointmentDetailResponseDto rejectAppointment(
             Integer maPhieuDatLich, RejectAppointmentRequestDto request) {
         Integer normalizedMaPhieuDatLich = normalizePositiveId(maPhieuDatLich, "maPhieuDatLich");
@@ -243,6 +274,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 phieu.getTrieuChungGhiChu(),
                 phieu.getTrangThaiPhieu(),
                 phieu.getLyDoTuChoi(),
+                canReviewAppointment(phieu),
                 lichLamViec.getNgayCuThe(),
                 lichLamViec.getThuTrongTuan(),
                 chiTiet.getGioBatDau(),
@@ -423,6 +455,35 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
         String normalized = value.trim();
         return normalized.isBlank() ? null : normalized;
+    }
+
+    private boolean canReviewAppointment(PhieuDatLich phieu) {
+        if (phieu == null || phieu.getMaNguoiDung() == null || phieu.getMaChiTiet() == null) {
+            return false;
+        }
+        if (!TrangThaiPhieuDatLich.DA_KHAM.name().equals(phieu.getTrangThaiPhieu())) {
+            return false;
+        }
+
+        Integer maBacSi = resolveDoctorId(phieu);
+        if (maBacSi == null) {
+            return false;
+        }
+
+        return danhGiaBacSiRepository
+                .findByMaNguoiDungAndMaBacSi(phieu.getMaNguoiDung(), maBacSi)
+                .isEmpty();
+    }
+
+    private Integer resolveDoctorId(PhieuDatLich phieu) {
+        ChiTietLich chiTiet =
+                chiTietLichRepository.selectById(phieu.getMaChiTiet()).orElse(null);
+        if (chiTiet == null) {
+            return null;
+        }
+        LichLamViec lichLamViec =
+                lichLamViecRepository.selectById(chiTiet.getMaLichLamViec()).orElse(null);
+        return lichLamViec == null ? null : lichLamViec.getMaBacSi();
     }
 
     private String buildHoTenDayDu(String hoLot, String ten) {
