@@ -164,10 +164,15 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .selectById(normalizedMaBacSi)
                 .orElseThrow(() -> new IllegalArgumentException("Bac si khong ton tai"));
 
-        return phieuDatLichRepository
-                .findByMaBacSiAndTrangThaiPhieu(
-                        normalizedMaBacSi, TrangThaiPhieuDatLich.CHO_XAC_NHAN.name())
-                .stream()
+        return phieuDatLichRepository.findByMaBacSi(normalizedMaBacSi).stream()
+                .filter(phieu -> {
+                    String status = phieu.getTrangThaiPhieu();
+                    return TrangThaiPhieuDatLich.CHO_XAC_NHAN.name().equals(status)
+                            || TrangThaiPhieuDatLich.DA_XAC_NHAN.name().equals(status)
+                            || TrangThaiPhieuDatLich.DA_KHAM.name().equals(status)
+                            || TrangThaiPhieuDatLich.TU_CHOI.name().equals(status)
+                            || TrangThaiPhieuDatLich.DA_HUY.name().equals(status);
+                })
                 .map(this::mapToAppointmentRequest)
                 .toList();
     }

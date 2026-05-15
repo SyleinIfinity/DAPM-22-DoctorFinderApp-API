@@ -12,4 +12,5 @@ public record UserProfileResponseDto(
         String soDienThoai,
         String email,
         String cccd,
-        String anhDaiDien) {}
+        String anhDaiDien,
+        String anhDaiDienPublicId) {}

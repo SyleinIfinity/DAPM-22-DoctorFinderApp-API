@@ -7,11 +7,14 @@ import doctor.Models.Entities.TaiKhoan;
 import doctor.Repositories.Interfaces.NguoiDungRepository;
 import doctor.Repositories.Interfaces.TaiKhoanRepository;
 import doctor.Services.Interfaces.Users.UserService;
+import doctor.Utils.CloudinaryFileUploadHelper;
+import java.io.IOException;
 import java.util.List;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +26,7 @@ public class UserServiceImpl implements UserService {
 
     private final NguoiDungRepository nguoiDungRepository;
     private final TaiKhoanRepository taiKhoanRepository;
+    private final CloudinaryFileUploadHelper cloudinaryFileUploadHelper;
 
     @Override
     @Transactional(readOnly = true)
@@ -89,6 +93,37 @@ public class UserServiceImpl implements UserService {
         return mapToUserProfile(updatedNguoiDung);
     }
 
+    @Override
+    @Transactional
+    public UserProfileResponseDto updateUserAvatar(Integer maNguoiDung, MultipartFile avatar)
+            throws IOException {
+        Integer normalizedMaNguoiDung = normalizePositiveId(maNguoiDung, "maNguoiDung");
+        if (avatar == null || avatar.isEmpty()) {
+            throw new IllegalArgumentException("avatar is required");
+        }
+
+        NguoiDung nguoiDung =
+                nguoiDungRepository
+                        .selectById(normalizedMaNguoiDung)
+                        .orElseThrow(() -> new IllegalArgumentException("Nguoi dung khong ton tai"));
+
+        String oldPublicId = normalizeOptional(nguoiDung.getAnhDaiDienPublicId());
+        var uploaded = cloudinaryFileUploadHelper.uploadUserAvatar(avatar);
+        if (uploaded == null || uploaded.getUrl() == null || uploaded.getUrl().isBlank()) {
+            throw new IllegalStateException("Khong the upload avatar");
+        }
+
+        nguoiDung.setAnhDaiDien(uploaded.getUrl());
+        nguoiDung.setAnhDaiDienPublicId(uploaded.getPublicId());
+        nguoiDungRepository.update(nguoiDung);
+
+        if (oldPublicId != null && !oldPublicId.equals(uploaded.getPublicId())) {
+            cloudinaryFileUploadHelper.deleteImage(oldPublicId);
+        }
+
+        return mapToUserProfile(nguoiDung);
+    }
+
     private void validateUniqueFields(
             Integer maNguoiDung, String soDienThoai, String email, String cccd) {
         nguoiDungRepository
@@ -141,7 +176,8 @@ public class UserServiceImpl implements UserService {
                 nguoiDung.getSoDienThoai(),
                 nguoiDung.getEmail(),
                 nguoiDung.getCccd(),
-                nguoiDung.getAnhDaiDien());
+                nguoiDung.getAnhDaiDien(),
+                nguoiDung.getAnhDaiDienPublicId());
     }
 
     private String buildHoTenDayDu(String hoLot, String ten) {

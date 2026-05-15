@@ -11,7 +11,9 @@ import doctor.Repositories.Interfaces.BacSiRepository;
 import doctor.Repositories.Interfaces.NguoiDungRepository;
 import doctor.Repositories.Interfaces.TaiKhoanRepository;
 import doctor.Services.Interfaces.Doctors.DoctorService;
+import doctor.Utils.CloudinaryFileUploadHelper;
 import doctor.Utils.GeminiEmbeddingHelper;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -19,6 +21,7 @@ import org.springframework.beans.factory.annotation.Value;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +29,7 @@ public class DoctorServiceImpl implements DoctorService {
     private final BacSiRepository bacSiRepository;
     private final NguoiDungRepository nguoiDungRepository;
     private final TaiKhoanRepository taiKhoanRepository;
+    private final CloudinaryFileUploadHelper cloudinaryFileUploadHelper;
     private final GeminiEmbeddingHelper geminiEmbeddingHelper;
 
     @Value("${app.ai.doctor-image-search.max-candidates:30}")
@@ -190,6 +194,44 @@ public class DoctorServiceImpl implements DoctorService {
         return mapToDoctorProfile(updatedBacSi);
     }
 
+    @Override
+    @Transactional
+    public DoctorProfileResponseDto updateDoctorAvatar(Integer maBacSi, MultipartFile avatar)
+            throws IOException {
+        Integer normalizedMaBacSi = normalizePositiveId(maBacSi, "maBacSi");
+        if (avatar == null || avatar.isEmpty()) {
+            throw new IllegalArgumentException("avatar is required");
+        }
+
+        BacSi bacSi =
+                bacSiRepository
+                        .selectById(normalizedMaBacSi)
+                        .orElseThrow(() -> new IllegalArgumentException("Bac si khong ton tai"));
+
+        NguoiDung nguoiDung =
+                nguoiDungRepository
+                        .findByMaTaiKhoan(bacSi.getMaTaiKhoan())
+                        .orElseThrow(() -> new IllegalStateException("Khong tim thay thong tin nguoi dung cua bac si"));
+
+        String oldAvatarPublicId = normalizeOptional(nguoiDung.getAnhDaiDienPublicId());
+        CloudinaryFileUploadHelper.UploadResult uploaded =
+                cloudinaryFileUploadHelper.uploadDoctorAvatar(avatar);
+
+        if (uploaded == null || uploaded.getUrl() == null || uploaded.getUrl().isBlank()) {
+            throw new IllegalStateException("Khong the upload avatar");
+        }
+
+        nguoiDung.setAnhDaiDien(uploaded.getUrl());
+        nguoiDung.setAnhDaiDienPublicId(uploaded.getPublicId());
+        nguoiDungRepository.update(nguoiDung);
+
+        if (oldAvatarPublicId != null && !oldAvatarPublicId.equals(uploaded.getPublicId())) {
+            cloudinaryFileUploadHelper.deleteImage(oldAvatarPublicId);
+        }
+
+        return mapToDoctorProfile(bacSi);
+    }
+
     private DoctorProfileResponseDto mapToDoctorProfile(BacSi bacSi) {
         TaiKhoan taiKhoan =
                 taiKhoanRepository
@@ -215,6 +257,7 @@ public class DoctorServiceImpl implements DoctorService {
                 nguoiDung.getSoDienThoai(),
                 nguoiDung.getEmail(),
                 nguoiDung.getAnhDaiDien(),
+                nguoiDung.getAnhDaiDienPublicId(),
                 bacSi.getChuyenKhoa(),
                 bacSi.getTrinhDoChuyenMon(),
                 bacSi.getLoaiHinhBacSi(),

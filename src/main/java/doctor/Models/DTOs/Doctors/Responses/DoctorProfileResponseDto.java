@@ -13,6 +13,7 @@ public record DoctorProfileResponseDto(
         String soDienThoai,
         String email,
         String anhDaiDien,
+        String anhDaiDienPublicId,
         String chuyenKhoa,
         String trinhDoChuyenMon,
         String loaiHinhBacSi,

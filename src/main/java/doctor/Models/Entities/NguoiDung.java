@@ -43,5 +43,8 @@ public class NguoiDung {
 
     @Column(name = "anhdaidien")
     private String anhDaiDien;
+
+    @Column(name = "anhdaidienpublicid")
+    private String anhDaiDienPublicId;
 }
 

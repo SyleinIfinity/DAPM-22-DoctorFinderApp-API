@@ -79,12 +79,25 @@ public class DoctorController {
         }
     }
 
-    @PutMapping("/{maBacSi}")
+    @PutMapping(value = "/{maBacSi}", consumes = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<DoctorProfileResponseDto> updateDoctorProfile(
             @PathVariable Integer maBacSi, @RequestBody UpdateDoctorProfileRequestDto request) {
         if (request == null) {
             throw new IllegalArgumentException("Request body is required");
         }
         return ResponseEntity.ok(doctorService.updateDoctorProfile(maBacSi, request));
+    }
+
+    @PutMapping(value = "/{maBacSi}/avatar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<DoctorProfileResponseDto> updateDoctorAvatar(
+            @PathVariable Integer maBacSi, @RequestPart("avatar") MultipartFile avatar) {
+        if (avatar == null || avatar.isEmpty()) {
+            throw new IllegalArgumentException("avatar is required");
+        }
+        try {
+            return ResponseEntity.ok(doctorService.updateDoctorAvatar(maBacSi, avatar));
+        } catch (IOException ex) {
+            throw new IllegalStateException("Khong the upload avatar", ex);
+        }
     }
 }
