@@ -9,6 +9,14 @@ public record ErrorResponseDto(String code, String message, Long retryAfterSecon
         return new ErrorResponseDto("TOO_MANY_REQUESTS", message, Math.max(1L, retryAfterSeconds));
     }
 
+    public static ErrorResponseDto uploadFailed(String message) {
+        return new ErrorResponseDto("UPLOAD_FAILED", message, null);
+    }
+
+    public static ErrorResponseDto databaseError(String message) {
+        return new ErrorResponseDto("DATABASE_ERROR", message, null);
+    }
+
     public static ErrorResponseDto internalError() {
         return new ErrorResponseDto("INTERNAL_ERROR", "Da xay ra loi he thong", null);
     }

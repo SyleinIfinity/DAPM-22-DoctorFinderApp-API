@@ -14,6 +14,25 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(ErrorResponseDto.badRequest(ex.getMessage()));
     }
 
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ErrorResponseDto> handleIllegalState(IllegalStateException ex) {
+        String message = ex.getMessage();
+        if (message != null && message.contains("Cloudinary")) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                    .body(ErrorResponseDto.uploadFailed(message));
+        }
+        if (message != null && message.contains("luu avatar vao co so du lieu")) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(ErrorResponseDto.databaseError(message));
+        }
+        if (message != null && message.contains("URL khong hop le")) {
+            return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                    .body(ErrorResponseDto.uploadFailed(message));
+        }
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ErrorResponseDto.internalError());
+    }
+
     @ExceptionHandler(TooManyRequestsException.class)
     public ResponseEntity<ErrorResponseDto> handleTooManyRequests(TooManyRequestsException ex) {
         return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)

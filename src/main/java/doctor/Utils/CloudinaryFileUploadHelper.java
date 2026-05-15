@@ -82,6 +82,26 @@ public class CloudinaryFileUploadHelper {
         return "ok".equalsIgnoreCase(status);
     }
 
+    public boolean imageExists(String publicId) {
+        if (publicId == null || publicId.isBlank()) {
+            return false;
+        }
+        try {
+            Map<?, ?> resource =
+                    cloudinary.api().resource(publicId, ObjectUtils.asMap("resource_type", "image"));
+            return resource != null && resource.get("public_id") != null;
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    public String buildSecureUrl(String publicId) {
+        if (publicId == null || publicId.isBlank()) {
+            return null;
+        }
+        return cloudinary.url().secure(true).generate(publicId);
+    }
+
     private static String valueAsString(Object value) {
         return value == null ? null : value.toString();
     }

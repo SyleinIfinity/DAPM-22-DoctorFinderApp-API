@@ -12,11 +12,14 @@ import java.io.IOException;
 import java.util.List;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
     private static final Pattern EMAIL_PATTERN =
@@ -78,7 +81,6 @@ public class UserServiceImpl implements UserService {
         String soDienThoai = normalizeSoDienThoai(request.soDienThoai());
         String email = normalizeEmail(request.email());
         String cccd = normalizeCccd(request.cccd());
-        String anhDaiDien = normalizeOptional(request.anhDaiDien());
 
         validateUniqueFields(normalizedMaNguoiDung, soDienThoai, email, cccd);
 
@@ -87,7 +89,6 @@ public class UserServiceImpl implements UserService {
         nguoiDung.setSoDienThoai(soDienThoai);
         nguoiDung.setEmail(email);
         nguoiDung.setCccd(cccd);
-        nguoiDung.setAnhDaiDien(anhDaiDien);
 
         NguoiDung updatedNguoiDung = nguoiDungRepository.update(nguoiDung);
         return mapToUserProfile(updatedNguoiDung);
@@ -108,17 +109,47 @@ public class UserServiceImpl implements UserService {
                         .orElseThrow(() -> new IllegalArgumentException("Nguoi dung khong ton tai"));
 
         String oldPublicId = normalizeOptional(nguoiDung.getAnhDaiDienPublicId());
-        var uploaded = cloudinaryFileUploadHelper.uploadUserAvatar(avatar);
+        if (oldPublicId != null) {
+            try {
+                boolean deleted = cloudinaryFileUploadHelper.deleteImage(oldPublicId);
+                if (!deleted) {
+                    log.warn(
+                            "Current avatar not found or already deleted for user {} with publicId {}",
+                            normalizedMaNguoiDung,
+                            oldPublicId);
+                }
+            } catch (IOException ex) {
+                log.warn(
+                        "Delete current avatar failed for user {} with publicId {}",
+                        normalizedMaNguoiDung,
+                        oldPublicId,
+                        ex);
+                throw new IllegalStateException("Khong the xoa avatar hien tai tren Cloudinary", ex);
+            }
+        } else {
+            log.debug("No previous Cloudinary avatar for user {}, skip delete", normalizedMaNguoiDung);
+        }
+
+        CloudinaryFileUploadHelper.UploadResult uploaded;
+        try {
+            uploaded = cloudinaryFileUploadHelper.uploadUserAvatar(avatar);
+        } catch (IOException ex) {
+            log.warn("Upload avatar failed for user {}", normalizedMaNguoiDung, ex);
+            throw new IllegalStateException("Khong the upload avatar len Cloudinary", ex);
+        }
+
         if (uploaded == null || uploaded.getUrl() == null || uploaded.getUrl().isBlank()) {
-            throw new IllegalStateException("Khong the upload avatar");
+            throw new IllegalStateException("Cloudinary tra ve URL khong hop le");
         }
 
         nguoiDung.setAnhDaiDien(uploaded.getUrl());
         nguoiDung.setAnhDaiDienPublicId(uploaded.getPublicId());
-        nguoiDungRepository.update(nguoiDung);
 
-        if (oldPublicId != null && !oldPublicId.equals(uploaded.getPublicId())) {
-            cloudinaryFileUploadHelper.deleteImage(oldPublicId);
+        try {
+            nguoiDung = nguoiDungRepository.update(nguoiDung);
+        } catch (DataAccessException ex) {
+            log.error("Update avatar DB failed for user {}", normalizedMaNguoiDung, ex);
+            throw new IllegalStateException("Khong the luu avatar vao co so du lieu", ex);
         }
 
         return mapToUserProfile(nguoiDung);
