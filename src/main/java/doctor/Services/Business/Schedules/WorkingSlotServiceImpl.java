@@ -141,6 +141,77 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
         }
     }
 
+    @Override
+    @Transactional
+    public void deleteWorkingSlotsForDay(Integer maBacSi, LocalDate date) {
+        Integer normalizedMaBacSi = normalizePositiveId(maBacSi, "maBacSi");
+        LocalDate normalizedDate = requireDate(date, "date");
+        requireBacSi(normalizedMaBacSi);
+
+        List<LichLamViec> schedulesForDate = lichLamViecRepository.findByMaBacSiAndNgayCuThe(normalizedMaBacSi, normalizedDate);
+        deleteSchedulesCompletelyByList(schedulesForDate);
+    }
+
+    @Override
+    @Transactional
+    public void deleteWorkingSlotDetail(Integer maBacSi, Integer maChiTiet) {
+        Integer normalizedMaBacSi = normalizePositiveId(maBacSi, "maBacSi");
+        Integer normalizedMaChiTiet = normalizePositiveId(maChiTiet, "maChiTiet");
+        requireBacSi(normalizedMaBacSi);
+
+        ChiTietLich chiTiet = chiTietLichRepository
+                .selectById(normalizedMaChiTiet)
+                .orElseThrow(() -> new IllegalArgumentException("Chi tiết lịch không tồn tại"));
+
+        LichLamViec lichLamViec = lichLamViecRepository
+                .selectById(chiTiet.getMaLichLamViec())
+                .orElseThrow(() -> new IllegalArgumentException("Lịch làm việc không tồn tại"));
+
+        if (!lichLamViec.getMaBacSi().equals(normalizedMaBacSi)) {
+            throw new IllegalArgumentException("Bác sĩ không có quyền xóa chi tiết lịch này");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        assertScheduleCanBeCancelled(lichLamViec, now);
+
+        // Delete the specific ChiTietLich
+        chiTietLichRepository.deleteById(normalizedMaChiTiet);
+
+        // Check if LichLamViec still has other ChiTietLich
+        List<ChiTietLich> remainingChiTiet = chiTietLichRepository.findByMaLichLamViec(lichLamViec.getMaLichLamViec());
+        if (remainingChiTiet == null || remainingChiTiet.isEmpty()) {
+            // If no more ChiTietLich, delete the LichLamViec
+            lichLamViecRepository.deleteById(lichLamViec.getMaLichLamViec());
+        }
+    }
+
+    private void deleteSchedulesCompletelyByList(List<LichLamViec> schedules) {
+        if (schedules == null || schedules.isEmpty()) {
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        for (LichLamViec lichLamViec : schedules) {
+            if (lichLamViec == null || lichLamViec.getMaLichLamViec() == null) {
+                continue;
+            }
+
+            // Check if can be deleted
+            assertScheduleCanBeCancelled(lichLamViec, now);
+
+            // Delete all ChiTietLich associated with this LichLamViec
+            List<ChiTietLich> chiTietList = chiTietLichRepository.findByMaLichLamViec(lichLamViec.getMaLichLamViec());
+            for (ChiTietLich chiTiet : chiTietList) {
+                if (chiTiet != null && chiTiet.getMaChiTiet() != null) {
+                    chiTietLichRepository.deleteById(chiTiet.getMaChiTiet());
+                }
+            }
+
+            // Delete the LichLamViec itself
+            lichLamViecRepository.deleteById(lichLamViec.getMaLichLamViec());
+        }
+    }
+
     private List<WorkingScheduleResponseDto> upsertWorkingSlotsInternal(
             Integer maBacSi, List<WorkingSlotUpsertItemDto> items, ActionMode mode) {
         Integer normalizedMaBacSi = normalizePositiveId(maBacSi, "maBacSi");

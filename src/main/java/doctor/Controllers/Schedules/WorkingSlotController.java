@@ -69,4 +69,17 @@ public class WorkingSlotController {
         workingSlotService.deleteWorkingSlots(maBacSi, items);
         return ResponseEntity.noContent().build();
     }
-}
+
+    @DeleteMapping("/by-date")
+    public ResponseEntity<Void> deleteWorkingSlotsForDay(
+            @PathVariable Integer maBacSi, @RequestParam LocalDate date) {
+        workingSlotService.deleteWorkingSlotsForDay(maBacSi, date);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/{maChiTiet}")
+    public ResponseEntity<Void> deleteWorkingSlotDetail(
+            @PathVariable Integer maBacSi, @PathVariable Integer maChiTiet) {
+        workingSlotService.deleteWorkingSlotDetail(maBacSi, maChiTiet);
+        return ResponseEntity.noContent().build();
+    }}

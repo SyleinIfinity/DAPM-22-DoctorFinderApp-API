@@ -19,6 +19,10 @@ public interface WorkingSlotService {
 
     void deleteWorkingSlots(Integer maBacSi, List<WorkingSlotUpsertItemDto> items);
 
+    void deleteWorkingSlotsForDay(Integer maBacSi, LocalDate date);
+
+    void deleteWorkingSlotDetail(Integer maBacSi, Integer maChiTiet);
+
     List<DoctorScheduleCalendarDayResponseDto> getCalendarDays(
             Integer maBacSi, DoctorScheduleCalendarQueryDto query);
 }
