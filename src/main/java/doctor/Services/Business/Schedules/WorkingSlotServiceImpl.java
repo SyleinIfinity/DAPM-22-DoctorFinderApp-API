@@ -28,6 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -222,13 +223,25 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
 
         List<NormalizedItem> normalizedItems = normalizeItems(items);
         List<WorkingScheduleResponseDto> results = new ArrayList<>();
+        List<String> skippedKeys = new ArrayList<>();
         for (NormalizedItem item : normalizedItems) {
             List<LichLamViec> existingSchedules = loadSchedulesByKey(normalizedMaBacSi, item.key());
             boolean shouldReplace = mode == ActionMode.UPDATE && !existingSchedules.isEmpty();
+            Set<Integer> excludedScheduleIds =
+                    shouldReplace
+                            ? existingSchedules.stream()
+                                    .map(LichLamViec::getMaLichLamViec)
+                                    .filter(id -> id != null)
+                                    .collect(Collectors.toSet())
+                            : Set.of();
 
-            // Check for time conflicts with other schedules (only for specific dates)
+            // Skip duplicated day/time instead of failing the whole batch.
             if (item.key().ngayCuThe() != null) {
-                checkTimeConflicts(normalizedMaBacSi, item);
+                boolean conflicted = hasTimeConflict(normalizedMaBacSi, item, excludedScheduleIds);
+                if (conflicted) {
+                    skippedKeys.add(formatScheduleKey(item.key()));
+                    continue;
+                }
             }
 
             if (shouldReplace) {
@@ -263,6 +276,12 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
                             createdChiTiet));
         }
 
+        if (results.isEmpty() && !skippedKeys.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Tat ca ngay da bi trung khung gio, khong tao duoc lich moi: "
+                            + String.join(", ", skippedKeys));
+        }
+
         results.sort(
                 Comparator.comparing(
                                 WorkingScheduleResponseDto::ngayCuThe,
@@ -274,9 +293,9 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
         return results;
     }
 
-    private void checkTimeConflicts(Integer maBacSi, NormalizedItem newItem) {
+    private boolean hasTimeConflict(Integer maBacSi, NormalizedItem newItem, Set<Integer> excludedScheduleIds) {
         if (newItem.key().ngayCuThe() == null) {
-            return;
+            return false;
         }
 
         LocalDate targetDate = newItem.key().ngayCuThe();
@@ -287,6 +306,12 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
                 continue;
             }
 
+            if (existing.getMaLichLamViec() != null
+                    && excludedScheduleIds != null
+                    && excludedScheduleIds.contains(existing.getMaLichLamViec())) {
+                continue;
+            }
+
             String trangThai = normalizeOptional(existing.getTrangThaiLich());
             if (TrangThaiLichLamViec.DA_HUY.name().equals(trangThai)) {
                 continue; // Ignore cancelled schedules
@@ -294,11 +319,24 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
 
             if (isOverlapping(existing.getGioBatDau(), existing.getGioKetThuc(),
                     newItem.gioBatDau(), newItem.gioKetThuc())) {
-                throw new IllegalArgumentException(
-                        "Khung giờ " + newItem.gioBatDau() + "-" + newItem.gioKetThuc() +
-                        " xung đột với lịch hiện tại");
+                return true;
             }
         }
+
+        return false;
+    }
+
+    private String formatScheduleKey(ScheduleKey key) {
+        if (key == null) {
+            return "unknown";
+        }
+        if (key.ngayCuThe() != null) {
+            return key.ngayCuThe().toString();
+        }
+        if (key.thuTrongTuan() != null) {
+            return "thu " + key.thuTrongTuan();
+        }
+        return "unknown";
     }
 
     private List<NormalizedItem> normalizeItems(List<WorkingSlotUpsertItemDto> items) {
