@@ -141,12 +141,12 @@ public class AdminAnalyticsServiceImpl implements AdminAnalyticsService {
         Query q =
                 em.createNativeQuery(
                         """
-                        SELECT v.mabacsi, COUNT(*) AS cnt, n.holot, n.ten
+                        SELECT v.mabacsi, COUNT(*) AS cnt, n.holot, n.ten, b.chuyenkhoa, b.trangthaihoso
                           FROM luot_xem_ho_so_bac_si v
                           JOIN bac_si b ON b.mabacsi = v.mabacsi
                           LEFT JOIN nguoi_dung n ON n.mataikhoan = b.mataikhoan
                          WHERE v.thoigian BETWEEN :from AND :to
-                         GROUP BY v.mabacsi, n.holot, n.ten
+                         GROUP BY v.mabacsi, n.holot, n.ten, b.chuyenkhoa, b.trangthaihoso
                          ORDER BY cnt DESC
                          LIMIT :lim
                         """);
@@ -162,7 +162,8 @@ public class AdminAnalyticsServiceImpl implements AdminAnalyticsService {
         for (Object[] r : rows) {
             long cnt = ((Number) r[1]).longValue();
             topSum += cnt;
-            String label = "BS " + fullName(r[2], r[3], "ID " + r[0]);
+            String specialty = r[4] != null ? String.valueOf(r[4]) : "Chưa rõ";
+            String label = "BS " + fullName(r[2], r[3], "ID " + r[0]) + " • " + specialty;
             slices.add(new AdminReportSliceDto(label, cnt, 0.0));
         }
         long other = total - topSum;
@@ -185,12 +186,12 @@ public class AdminAnalyticsServiceImpl implements AdminAnalyticsService {
         Query q =
                 em.createNativeQuery(
                         """
-                        SELECT v.mabacsi, COUNT(*) AS cnt, n.holot, n.ten
+                        SELECT v.mabacsi, COUNT(*) AS cnt, n.holot, n.ten, b.chuyenkhoa, b.trangthaihoso
                           FROM luot_xem_ho_so_bac_si v
                           JOIN bac_si b ON b.mabacsi = v.mabacsi
                           LEFT JOIN nguoi_dung n ON n.mataikhoan = b.mataikhoan
                          WHERE v.thoigian BETWEEN :from AND :to
-                         GROUP BY v.mabacsi, n.holot, n.ten
+                         GROUP BY v.mabacsi, n.holot, n.ten, b.chuyenkhoa, b.trangthaihoso
                          ORDER BY cnt DESC
                          LIMIT :lim
                         """);
@@ -205,7 +206,9 @@ public class AdminAnalyticsServiceImpl implements AdminAnalyticsService {
             Integer id = ((Number) r[0]).intValue();
             long cnt = ((Number) r[1]).longValue();
             String name = fullName(r[2], r[3], "Bác sĩ #" + id);
-            out.add(new AdminReportDoctorRankDto(rank++, id, name, cnt));
+            String specialty = r[4] != null ? String.valueOf(r[4]) : "Chưa rõ";
+            String status = r[5] != null ? String.valueOf(r[5]) : "UNKNOWN";
+            out.add(new AdminReportDoctorRankDto(rank++, id, name, specialty, status, cnt));
         }
         return out;
     }
@@ -218,12 +221,12 @@ public class AdminAnalyticsServiceImpl implements AdminAnalyticsService {
         Query q =
                 em.createNativeQuery(
                         """
-                        SELECT d.mabacsi, COUNT(*) AS cnt, n.holot, n.ten
+                        SELECT d.mabacsi, COUNT(*) AS cnt, n.holot, n.ten, b.chuyenkhoa, b.trangthaihoso
                           FROM danh_sach_theo_doi d
                           JOIN bac_si b ON b.mabacsi = d.mabacsi
                           LEFT JOIN nguoi_dung n ON n.mataikhoan = b.mataikhoan
                          WHERE d.ngaytheodoi BETWEEN :from AND :to
-                         GROUP BY d.mabacsi, n.holot, n.ten
+                         GROUP BY d.mabacsi, n.holot, n.ten, b.chuyenkhoa, b.trangthaihoso
                          ORDER BY cnt DESC
                          LIMIT :lim
                         """);
@@ -238,7 +241,9 @@ public class AdminAnalyticsServiceImpl implements AdminAnalyticsService {
             Integer id = ((Number) r[0]).intValue();
             long cnt = ((Number) r[1]).longValue();
             String name = fullName(r[2], r[3], "Bác sĩ #" + id);
-            out.add(new AdminReportDoctorRankDto(rank++, id, name, cnt));
+            String specialty = r[4] != null ? String.valueOf(r[4]) : "Chưa rõ";
+            String status = r[5] != null ? String.valueOf(r[5]) : "UNKNOWN";
+            out.add(new AdminReportDoctorRankDto(rank++, id, name, specialty, status, cnt));
         }
         return out;
     }
@@ -307,5 +312,9 @@ public class AdminAnalyticsServiceImpl implements AdminAnalyticsService {
         String t = ten != null ? String.valueOf(ten).trim() : "";
         String combined = (h + " " + t).trim();
         return combined.isEmpty() ? fallback : combined;
+    }
+
+    public List<AdminReportDoctorRankDto> getTopDoctorsByRank(LocalDateTime from, LocalDateTime to, int limit) {
+        return getTopDoctorsByViews(from, to, limit);
     }
 }

@@ -137,7 +137,7 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
 
         List<NormalizedItem> normalizedItems = normalizeItems(items);
         for (NormalizedItem item : normalizedItems) {
-            cancelExistingSchedules(loadSchedulesByKey(normalizedMaBacSi, item.key()));
+            deleteSchedulesCompletelyByKey(normalizedMaBacSi, item.key());
         }
     }
 
@@ -153,33 +153,28 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
         List<WorkingScheduleResponseDto> results = new ArrayList<>();
         for (NormalizedItem item : normalizedItems) {
             List<LichLamViec> existingSchedules = loadSchedulesByKey(normalizedMaBacSi, item.key());
-            boolean shouldAppend = mode == ActionMode.CREATE && !existingSchedules.isEmpty();
             boolean shouldReplace = mode == ActionMode.UPDATE && !existingSchedules.isEmpty();
+
+            // Check for time conflicts with other schedules (only for specific dates)
+            if (item.key().ngayCuThe() != null) {
+                checkTimeConflicts(normalizedMaBacSi, item);
+            }
 
             if (shouldReplace) {
                 cancelExistingSchedules(existingSchedules);
             }
 
-            LichLamViec targetSchedule;
-            if (shouldAppend) {
-                targetSchedule = pickAppendTarget(existingSchedules, item);
-                extendScheduleWindow(targetSchedule, item);
-                targetSchedule.setMaKhungGio(item.maKhungGio());
-                targetSchedule.setSoLuongToiDa(Math.max(targetSchedule.getSoLuongToiDa(), item.soLuongToiDa()));
-                targetSchedule.setTrangThaiLich(item.trangThaiLich());
-                targetSchedule = lichLamViecRepository.update(targetSchedule);
-            } else {
-                targetSchedule = new LichLamViec();
-                targetSchedule.setMaBacSi(normalizedMaBacSi);
-                targetSchedule.setThuTrongTuan(item.key().thuTrongTuan());
-                targetSchedule.setNgayCuThe(item.key().ngayCuThe());
-                targetSchedule.setGioBatDau(item.gioBatDau());
-                targetSchedule.setGioKetThuc(item.gioKetThuc());
-                targetSchedule.setMaKhungGio(item.maKhungGio());
-                targetSchedule.setSoLuongToiDa(item.soLuongToiDa());
-                targetSchedule.setTrangThaiLich(item.trangThaiLich());
-                targetSchedule = lichLamViecRepository.insert(targetSchedule);
-            }
+            // CREATE and ADD always create new schedule (don't append to existing)
+            LichLamViec targetSchedule = new LichLamViec();
+            targetSchedule.setMaBacSi(normalizedMaBacSi);
+            targetSchedule.setThuTrongTuan(item.key().thuTrongTuan());
+            targetSchedule.setNgayCuThe(item.key().ngayCuThe());
+            targetSchedule.setGioBatDau(item.gioBatDau());
+            targetSchedule.setGioKetThuc(item.gioKetThuc());
+            targetSchedule.setMaKhungGio(item.maKhungGio());
+            targetSchedule.setSoLuongToiDa(item.soLuongToiDa());
+            targetSchedule.setTrangThaiLich(item.trangThaiLich());
+            targetSchedule = lichLamViecRepository.insert(targetSchedule);
 
             List<WorkingScheduleSlotResponseDto> createdChiTiet = createChiTietSlots(targetSchedule, item);
             results.add(
@@ -206,6 +201,33 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
                                 Comparator.nullsLast(Comparator.naturalOrder()))
                         .thenComparing(WorkingScheduleResponseDto::gioBatDau));
         return results;
+    }
+
+    private void checkTimeConflicts(Integer maBacSi, NormalizedItem newItem) {
+        if (newItem.key().ngayCuThe() == null) {
+            return;
+        }
+
+        LocalDate targetDate = newItem.key().ngayCuThe();
+        List<LichLamViec> schedules = lichLamViecRepository.findByMaBacSiAndNgayCuThe(maBacSi, targetDate);
+
+        for (LichLamViec existing : schedules) {
+            if (existing == null) {
+                continue;
+            }
+
+            String trangThai = normalizeOptional(existing.getTrangThaiLich());
+            if (TrangThaiLichLamViec.DA_HUY.name().equals(trangThai)) {
+                continue; // Ignore cancelled schedules
+            }
+
+            if (isOverlapping(existing.getGioBatDau(), existing.getGioKetThuc(),
+                    newItem.gioBatDau(), newItem.gioKetThuc())) {
+                throw new IllegalArgumentException(
+                        "Khung giờ " + newItem.gioBatDau() + "-" + newItem.gioKetThuc() +
+                        " xung đột với lịch hiện tại");
+            }
+        }
     }
 
     private List<NormalizedItem> normalizeItems(List<WorkingSlotUpsertItemDto> items) {
@@ -326,6 +348,34 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
             assertScheduleCanBeCancelled(existing, now);
             existing.setTrangThaiLich(TrangThaiLichLamViec.DA_HUY.name());
             lichLamViecRepository.update(existing);
+        }
+    }
+
+    private void deleteSchedulesCompletelyByKey(Integer maBacSi, ScheduleKey key) {
+        List<LichLamViec> schedules = loadSchedulesByKey(maBacSi, key);
+        if (schedules == null || schedules.isEmpty()) {
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        for (LichLamViec lichLamViec : schedules) {
+            if (lichLamViec == null || lichLamViec.getMaLichLamViec() == null) {
+                continue;
+            }
+
+            // Check if can be deleted
+            assertScheduleCanBeCancelled(lichLamViec, now);
+
+            // Delete all ChiTietLich associated with this LichLamViec
+            List<ChiTietLich> chiTietList = chiTietLichRepository.findByMaLichLamViec(lichLamViec.getMaLichLamViec());
+            for (ChiTietLich chiTiet : chiTietList) {
+                if (chiTiet != null && chiTiet.getMaChiTiet() != null) {
+                    chiTietLichRepository.deleteById(chiTiet.getMaChiTiet());
+                }
+            }
+
+            // Delete the LichLamViec itself
+            lichLamViecRepository.deleteById(lichLamViec.getMaLichLamViec());
         }
     }
 
@@ -456,24 +506,6 @@ public class WorkingSlotServiceImpl implements WorkingSlotService {
                 .filter(this::shouldExposeSchedule)
                 .sorted(Comparator.comparing(LichLamViec::getGioBatDau))
                 .toList();
-    }
-
-    private LichLamViec pickAppendTarget(List<LichLamViec> existingSchedules, NormalizedItem item) {
-        if (existingSchedules == null || existingSchedules.isEmpty() || item == null) {
-            return null;
-        }
-
-        LichLamViec earliest = existingSchedules.get(0);
-        if (earliest == null) {
-            return null;
-        }
-
-        boolean sameDaySpecific = item.key().ngayCuThe() != null;
-        if (!sameDaySpecific) {
-            return earliest;
-        }
-
-        return earliest;
     }
 
     private void extendScheduleWindow(LichLamViec targetSchedule, NormalizedItem item) {
